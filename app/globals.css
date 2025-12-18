@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --bunker-surface-gradient: radial-gradient(80% 60% at 8% 12%, rgba(193, 33, 38, 0.18), transparent),
+    radial-gradient(60% 60% at 95% 85%, rgba(141, 34, 32, 0.16), transparent),
+    linear-gradient(135deg, rgba(8, 8, 8, 0.92) 0%, rgba(22, 22, 22, 0.78) 42%, rgba(0, 0, 0, 0.95) 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    @apply font-sans antialiased font-normal;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display font-bold;
+  }
+}
+
+@layer utilities {
+  .bg-bunker-surface {
+    background-color: #050505;
+    background-image: var(--bunker-surface-gradient);
+  }
+}
