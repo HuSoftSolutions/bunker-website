@@ -4,6 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import type Firebase from "@/lib/firebase/client";
 import { onSnapshot, setDoc } from "firebase/firestore";
 import { Field, FormCard, TextInput, Textarea, ErrorBox } from "@/components/ui/Form";
+import { Button } from "@/ui-kit/button";
+import {
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogDescription,
+  DialogTitle,
+} from "@/ui-kit/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/ui-kit/table";
+import { Text, TextLink } from "@/ui-kit/text";
 
 type ProgramForm = {
   id: string;
@@ -49,6 +66,13 @@ function normalizeLines(value: string) {
     .filter(Boolean);
 }
 
+function getLineItems(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function cloneState(value: JuniorGolfFormState) {
   return JSON.parse(JSON.stringify(value)) as JuniorGolfFormState;
 }
@@ -64,6 +88,22 @@ export function JuniorGolfSettingsPanel({ firebase }: JuniorGolfSettingsPanelPro
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [error, setError] = useState<Error | null>(null);
+  const [programModalOpen, setProgramModalOpen] = useState(false);
+  const [programEditingIndex, setProgramEditingIndex] = useState<number | null>(null);
+  const [programDraft, setProgramDraft] = useState<ProgramForm>({
+    id: createId("program"),
+    title: "",
+    description: "",
+    ctaLabel: "",
+    ctaUrl: "",
+  });
+  const [rateModalOpen, setRateModalOpen] = useState(false);
+  const [rateEditingIndex, setRateEditingIndex] = useState<number | null>(null);
+  const [rateDraft, setRateDraft] = useState<RateForm>({
+    id: createId("rate"),
+    title: "",
+    lines: "",
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -130,6 +170,74 @@ export function JuniorGolfSettingsPanel({ firebase }: JuniorGolfSettingsPanelPro
   }, [firebase]);
 
   const hasChanges = useMemo(() => JSON.stringify(form) !== JSON.stringify(initial), [form, initial]);
+
+  const openProgramModal = (index: number | null) => {
+    if (index === null) {
+      setProgramDraft({
+        id: createId("program"),
+        title: "",
+        description: "",
+        ctaLabel: "",
+        ctaUrl: "",
+      });
+      setProgramEditingIndex(null);
+    } else {
+      setProgramDraft({ ...form.programs[index] });
+      setProgramEditingIndex(index);
+    }
+    setProgramModalOpen(true);
+  };
+
+  const closeProgramModal = () => {
+    setProgramModalOpen(false);
+    setProgramEditingIndex(null);
+  };
+
+  const saveProgramDraft = () => {
+    setForm((prev) => {
+      const nextPrograms = [...prev.programs];
+      if (programEditingIndex === null) {
+        nextPrograms.push(programDraft);
+      } else {
+        nextPrograms[programEditingIndex] = programDraft;
+      }
+      return { ...prev, programs: nextPrograms };
+    });
+    closeProgramModal();
+  };
+
+  const openRateModal = (index: number | null) => {
+    if (index === null) {
+      setRateDraft({
+        id: createId("rate"),
+        title: "",
+        lines: "",
+      });
+      setRateEditingIndex(null);
+    } else {
+      setRateDraft({ ...form.lessonRates[index] });
+      setRateEditingIndex(index);
+    }
+    setRateModalOpen(true);
+  };
+
+  const closeRateModal = () => {
+    setRateModalOpen(false);
+    setRateEditingIndex(null);
+  };
+
+  const saveRateDraft = () => {
+    setForm((prev) => {
+      const nextRates = [...prev.lessonRates];
+      if (rateEditingIndex === null) {
+        nextRates.push(rateDraft);
+      } else {
+        nextRates[rateEditingIndex] = rateDraft;
+      }
+      return { ...prev, lessonRates: nextRates };
+    });
+    closeRateModal();
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -244,116 +352,74 @@ export function JuniorGolfSettingsPanel({ firebase }: JuniorGolfSettingsPanelPro
           <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
             Upcoming Programs
           </h3>
-          <button
-            type="button"
-            onClick={() =>
-              setForm((prev) => ({
-                ...prev,
-                programs: [
-                  ...prev.programs,
-                  { id: createId("program"), title: "", description: "", ctaLabel: "", ctaUrl: "" },
-                ],
-              }))
-            }
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-          >
+          <Button outline onClick={() => openProgramModal(null)}>
             Add Program
-          </button>
+          </Button>
         </div>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-6">
           {form.programs.length ? (
-            form.programs.map((program, index) => (
-              <div
-                key={program.id}
-                className="rounded-3xl border border-white/10 bg-black/30 p-6"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                    Program {index + 1}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        programs: prev.programs.filter((_, i) => i !== index),
-                      }))
-                    }
-                    className="rounded-full border border-red-500/30 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:bg-red-500/10"
-                  >
-                    Remove
-                  </button>
-                </div>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+              <Table dense>
+                <TableHead className="bg-black/40 text-xs uppercase tracking-wide text-white/60">
+                  <TableRow>
+                    <TableHeader>Program</TableHeader>
+                    <TableHeader>Description</TableHeader>
+                    <TableHeader>CTA</TableHeader>
+                    <TableHeader className="text-right">Actions</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {form.programs.map((program, index) => {
+                    const description = program.description.trim() || "—";
+                    const ctaLabel = program.ctaLabel.trim();
+                    const ctaUrl = program.ctaUrl.trim();
+                    const ctaText = ctaLabel || ctaUrl || "—";
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <Field label="Title" required className="md:col-span-2">
-                    <TextInput
-                      value={program.title}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          programs: prev.programs.map((p, i) =>
-                            i === index ? { ...p, title: e.target.value } : p,
-                          ),
-                        }))
-                      }
-                      required
-                    />
-                  </Field>
-
-                  <Field label="Description" className="md:col-span-2">
-                    <Textarea
-                      rows={3}
-                      value={program.description}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          programs: prev.programs.map((p, i) =>
-                            i === index ? { ...p, description: e.target.value } : p,
-                          ),
-                        }))
-                      }
-                    />
-                  </Field>
-
-                  <Field label="CTA Label">
-                    <TextInput
-                      value={program.ctaLabel}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          programs: prev.programs.map((p, i) =>
-                            i === index ? { ...p, ctaLabel: e.target.value } : p,
-                          ),
-                        }))
-                      }
-                      placeholder="Register Now"
-                    />
-                  </Field>
-
-                  <Field label="CTA URL">
-                    <TextInput
-                      type="url"
-                      inputMode="url"
-                      value={program.ctaUrl}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          programs: prev.programs.map((p, i) =>
-                            i === index ? { ...p, ctaUrl: e.target.value } : p,
-                          ),
-                        }))
-                      }
-                      placeholder="https://example.com"
-                    />
-                  </Field>
-                </div>
-              </div>
-            ))
+                    return (
+                      <TableRow key={program.id}>
+                        <TableCell className="text-white">
+                          {program.title || `Program ${index + 1}`}
+                        </TableCell>
+                        <TableCell className="max-w-[280px] truncate text-white/70">
+                          {description}
+                        </TableCell>
+                        <TableCell className="text-white/70">
+                          {ctaUrl ? (
+                            <TextLink href={ctaUrl} target="_blank" rel="noopener noreferrer">
+                              {ctaText}
+                            </TextLink>
+                          ) : (
+                            ctaText
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button outline onClick={() => openProgramModal(index)}>
+                              Edit
+                            </Button>
+                            <Button
+                              color="red"
+                              onClick={() =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  programs: prev.programs.filter((_, i) => i !== index),
+                                }))
+                              }
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/20 bg-black/20 px-6 py-10 text-center text-sm text-white/60">
-              No programs configured.
+            <div className="rounded-2xl border border-dashed border-white/20 bg-black/20 px-6 py-10 text-center">
+              <Text className="text-sm text-white/60">No programs configured.</Text>
             </div>
           )}
         </div>
@@ -364,86 +430,185 @@ export function JuniorGolfSettingsPanel({ firebase }: JuniorGolfSettingsPanelPro
           <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
             Junior Lesson Rates
           </h3>
-          <button
-            type="button"
-            onClick={() =>
-              setForm((prev) => ({
-                ...prev,
-                lessonRates: [...prev.lessonRates, { id: createId("rate"), title: "", lines: "" }],
-              }))
-            }
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-          >
+          <Button outline onClick={() => openRateModal(null)}>
             Add Rate
-          </button>
+          </Button>
         </div>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-6">
           {form.lessonRates.length ? (
-            form.lessonRates.map((rate, index) => (
-              <div
-                key={rate.id}
-                className="rounded-3xl border border-white/10 bg-black/30 p-6"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                    Rate {index + 1}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        lessonRates: prev.lessonRates.filter((_, i) => i !== index),
-                      }))
-                    }
-                    className="rounded-full border border-red-500/30 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:bg-red-500/10"
-                  >
-                    Remove
-                  </button>
-                </div>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+              <Table dense>
+                <TableHead className="bg-black/40 text-xs uppercase tracking-wide text-white/60">
+                  <TableRow>
+                    <TableHeader>Rate</TableHeader>
+                    <TableHeader>Lines</TableHeader>
+                    <TableHeader className="text-right">Actions</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {form.lessonRates.map((rate, index) => {
+                    const lineItems = getLineItems(rate.lines);
+                    const preview = lineItems[0] || "—";
+                    const countLabel =
+                      lineItems.length > 0 ? `${lineItems.length} lines` : "No lines";
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <Field label="Title" required className="md:col-span-2">
-                    <TextInput
-                      value={rate.title}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          lessonRates: prev.lessonRates.map((r, i) =>
-                            i === index ? { ...r, title: e.target.value } : r,
-                          ),
-                        }))
-                      }
-                      required
-                    />
-                  </Field>
-
-                  <Field label="Lines (one per line)" className="md:col-span-2">
-                    <Textarea
-                      rows={3}
-                      value={rate.lines}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          lessonRates: prev.lessonRates.map((r, i) =>
-                            i === index ? { ...r, lines: e.target.value } : r,
-                          ),
-                        }))
-                      }
-                      placeholder="One Hour: $125\nHalf Hour: $65"
-                    />
-                  </Field>
-                </div>
-              </div>
-            ))
+                    return (
+                      <TableRow key={rate.id}>
+                        <TableCell className="text-white">
+                          {rate.title || `Rate ${index + 1}`}
+                        </TableCell>
+                        <TableCell className="text-white/70">
+                          <div className="text-xs uppercase tracking-wide text-white/50">
+                            {countLabel}
+                          </div>
+                          <div className="max-w-[280px] truncate text-sm text-white/70">
+                            {preview}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button outline onClick={() => openRateModal(index)}>
+                              Edit
+                            </Button>
+                            <Button
+                              color="red"
+                              onClick={() =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  lessonRates: prev.lessonRates.filter((_, i) => i !== index),
+                                }))
+                              }
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/20 bg-black/20 px-6 py-10 text-center text-sm text-white/60">
-              No rates configured.
+            <div className="rounded-2xl border border-dashed border-white/20 bg-black/20 px-6 py-10 text-center">
+              <Text className="text-sm text-white/60">No rates configured.</Text>
             </div>
           )}
         </div>
       </FormCard>
+
+      {programModalOpen ? (
+        <Dialog open={programModalOpen} onClose={closeProgramModal}>
+          <DialogTitle>
+            {programEditingIndex === null ? "Add Program" : "Edit Program"}
+          </DialogTitle>
+          <DialogDescription>
+            Update the program details shown on the junior golf page.
+          </DialogDescription>
+          <DialogBody>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Title" required className="md:col-span-2">
+                <TextInput
+                  value={programDraft.title}
+                  onChange={(event) =>
+                    setProgramDraft((prev) => ({ ...prev, title: event.target.value }))
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Description" className="md:col-span-2">
+                <Textarea
+                  rows={3}
+                  value={programDraft.description}
+                  onChange={(event) =>
+                    setProgramDraft((prev) => ({
+                      ...prev,
+                      description: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="CTA Label">
+                <TextInput
+                  value={programDraft.ctaLabel}
+                  onChange={(event) =>
+                    setProgramDraft((prev) => ({
+                      ...prev,
+                      ctaLabel: event.target.value,
+                    }))
+                  }
+                  placeholder="Register Now"
+                />
+              </Field>
+              <Field label="CTA URL">
+                <TextInput
+                  type="url"
+                  inputMode="url"
+                  value={programDraft.ctaUrl}
+                  onChange={(event) =>
+                    setProgramDraft((prev) => ({
+                      ...prev,
+                      ctaUrl: event.target.value,
+                    }))
+                  }
+                  placeholder="https://example.com"
+                />
+              </Field>
+            </div>
+          </DialogBody>
+          <DialogActions>
+            <Button outline onClick={closeProgramModal}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={saveProgramDraft}>
+              {programEditingIndex === null ? "Add Program" : "Save Program"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
+
+      {rateModalOpen ? (
+        <Dialog open={rateModalOpen} onClose={closeRateModal}>
+          <DialogTitle>
+            {rateEditingIndex === null ? "Add Rate" : "Edit Rate"}
+          </DialogTitle>
+          <DialogDescription>
+            Update the lesson rate details shown on the junior golf page.
+          </DialogDescription>
+          <DialogBody>
+            <div className="grid gap-4">
+              <Field label="Title" required>
+                <TextInput
+                  value={rateDraft.title}
+                  onChange={(event) =>
+                    setRateDraft((prev) => ({ ...prev, title: event.target.value }))
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Lines (one per line)">
+                <Textarea
+                  rows={4}
+                  value={rateDraft.lines}
+                  onChange={(event) =>
+                    setRateDraft((prev) => ({ ...prev, lines: event.target.value }))
+                  }
+                  placeholder="One Hour: $125\nHalf Hour: $65"
+                />
+              </Field>
+            </div>
+          </DialogBody>
+          <DialogActions>
+            <Button outline onClick={closeRateModal}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={saveRateDraft}>
+              {rateEditingIndex === null ? "Add Rate" : "Save Rate"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

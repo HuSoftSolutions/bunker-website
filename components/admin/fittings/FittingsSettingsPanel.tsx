@@ -4,6 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import type Firebase from "@/lib/firebase/client";
 import { onSnapshot, setDoc } from "firebase/firestore";
 import { ErrorBox, Field, FormCard, TextInput, Textarea } from "@/components/ui/Form";
+import { Button } from "@/ui-kit/button";
+import {
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogDescription,
+  DialogTitle,
+} from "@/ui-kit/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/ui-kit/table";
+import { Text } from "@/ui-kit/text";
 
 type FeeItemForm = {
   id: string;
@@ -72,6 +89,13 @@ export function FittingsSettingsPanel({ firebase }: FittingsSettingsPanelProps) 
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [error, setError] = useState<Error | null>(null);
+  const [feeModalOpen, setFeeModalOpen] = useState(false);
+  const [feeEditingIndex, setFeeEditingIndex] = useState<number | null>(null);
+  const [feeDraft, setFeeDraft] = useState<FeeItemForm>({
+    id: createId("fee"),
+    title: "",
+    description: "",
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -136,6 +160,35 @@ export function FittingsSettingsPanel({ firebase }: FittingsSettingsPanelProps) 
   }, [firebase]);
 
   const hasChanges = useMemo(() => JSON.stringify(form) !== JSON.stringify(initial), [form, initial]);
+
+  const openFeeModal = (index: number | null) => {
+    if (index === null) {
+      setFeeDraft({ id: createId("fee"), title: "", description: "" });
+      setFeeEditingIndex(null);
+    } else {
+      setFeeDraft({ ...form.feeItems[index] });
+      setFeeEditingIndex(index);
+    }
+    setFeeModalOpen(true);
+  };
+
+  const closeFeeModal = () => {
+    setFeeModalOpen(false);
+    setFeeEditingIndex(null);
+  };
+
+  const saveFeeDraft = () => {
+    setForm((prev) => {
+      const nextFees = [...prev.feeItems];
+      if (feeEditingIndex === null) {
+        nextFees.push(feeDraft);
+      } else {
+        nextFees[feeEditingIndex] = feeDraft;
+      }
+      return { ...prev, feeItems: nextFees };
+    });
+    closeFeeModal();
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -242,73 +295,59 @@ export function FittingsSettingsPanel({ firebase }: FittingsSettingsPanelProps) 
           <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
             Fitting Fees
           </h3>
-          <button
-            type="button"
-            onClick={() =>
-              setForm((prev) => ({
-                ...prev,
-                feeItems: [...prev.feeItems, { id: createId("fee"), title: "", description: "" }],
-              }))
-            }
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-          >
+          <Button outline onClick={() => openFeeModal(null)}>
             Add Fee
-          </button>
+          </Button>
         </div>
 
-        <div className="mt-6 space-y-4">
-          {form.feeItems.map((item, index) => (
-            <div key={item.id} className="rounded-3xl border border-white/10 bg-black/30 p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                  Fee {index + 1}
-                </p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      feeItems: prev.feeItems.filter((fee) => fee.id !== item.id),
-                    }))
-                  }
-                  className="rounded-full border border-red-500/30 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:bg-red-500/10"
-                >
-                  Remove
-                </button>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <Field label="Title" required className="md:col-span-2">
-                  <TextInput
-                    value={item.title}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        feeItems: prev.feeItems.map((fee) =>
-                          fee.id === item.id ? { ...fee, title: e.target.value } : fee,
-                        ),
-                      }))
-                    }
-                    required
-                  />
-                </Field>
-                <Field label="Description" className="md:col-span-2">
-                  <TextInput
-                    value={item.description}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        feeItems: prev.feeItems.map((fee) =>
-                          fee.id === item.id ? { ...fee, description: e.target.value } : fee,
-                        ),
-                      }))
-                    }
-                    placeholder="$75 — Takes about 1 hour"
-                  />
-                </Field>
-              </div>
+        <div className="mt-6">
+          {form.feeItems.length ? (
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+              <Table dense>
+                <TableHead className="bg-black/40 text-xs uppercase tracking-wide text-white/60">
+                  <TableRow>
+                    <TableHeader>Fee</TableHeader>
+                    <TableHeader>Description</TableHeader>
+                    <TableHeader className="text-right">Actions</TableHeader>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {form.feeItems.map((item, index) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="text-white">
+                        {item.title || `Fee ${index + 1}`}
+                      </TableCell>
+                      <TableCell className="max-w-[320px] truncate text-white/70">
+                        {item.description.trim() || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button outline onClick={() => openFeeModal(index)}>
+                            Edit
+                          </Button>
+                          <Button
+                            color="red"
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                feeItems: prev.feeItems.filter((_, i) => i !== index),
+                              }))
+                            }
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          ))}
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/20 bg-black/20 px-6 py-10 text-center">
+              <Text className="text-sm text-white/60">No fees configured.</Text>
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
@@ -353,6 +392,47 @@ export function FittingsSettingsPanel({ firebase }: FittingsSettingsPanelProps) 
           </Field>
         </div>
       </FormCard>
+
+      {feeModalOpen ? (
+        <Dialog open={feeModalOpen} onClose={closeFeeModal}>
+          <DialogTitle>
+            {feeEditingIndex === null ? "Add Fee" : "Edit Fee"}
+          </DialogTitle>
+          <DialogDescription>
+            Update the fitting fee details displayed on the public page.
+          </DialogDescription>
+          <DialogBody>
+            <div className="grid gap-4">
+              <Field label="Title" required>
+                <TextInput
+                  value={feeDraft.title}
+                  onChange={(event) =>
+                    setFeeDraft((prev) => ({ ...prev, title: event.target.value }))
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Description">
+                <TextInput
+                  value={feeDraft.description}
+                  onChange={(event) =>
+                    setFeeDraft((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                  placeholder="$75 — Takes about 1 hour"
+                />
+              </Field>
+            </div>
+          </DialogBody>
+          <DialogActions>
+            <Button outline onClick={closeFeeModal}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={saveFeeDraft}>
+              {feeEditingIndex === null ? "Add Fee" : "Save Fee"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

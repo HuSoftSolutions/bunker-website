@@ -85,7 +85,7 @@ export function NavigationBar() {
               ))}
               {isAdmin ? (
                 <Link
-                  href={ROUTES.ADMIN}
+                  href={ROUTES.LOCATION_ADMIN}
                   className="rounded-full border border-primary/40 px-4 py-1 text-xs uppercase tracking-wide text-primary transition hover:bg-primary/10"
                 >
                   Admin Panel
@@ -216,7 +216,7 @@ export function NavigationBar() {
             </div>
             {isAdmin ? (
               <Link
-                href={ROUTES.ADMIN}
+                href={ROUTES.LOCATION_ADMIN}
                 className="rounded-xl bg-primary/20 px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-primary"
                 onClick={() => setMobileOpen(false)}
               >
@@ -314,7 +314,7 @@ export function NavigationBar() {
           <div className="mt-auto space-y-4 text-white">
             {isAdmin ? (
               <Link
-                href={ROUTES.ADMIN}
+                href={ROUTES.LOCATION_ADMIN}
                 className="flex w-full items-center justify-center rounded-full border border-primary/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10"
               >
                 Admin Panel

@@ -18,12 +18,15 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
 
   const redirectTo = searchParams.get("redirect") || "/admin/locations";
+  const isAdmin = Boolean(
+    (authUser as { roles?: Record<string, unknown> } | null)?.roles?.ADMIN,
+  );
 
   useEffect(() => {
-    if (!authLoading && authUser) {
+    if (!authLoading && isAdmin) {
       router.replace(redirectTo);
     }
-  }, [authLoading, authUser, redirectTo, router]);
+  }, [authLoading, isAdmin, redirectTo, router]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

@@ -29,7 +29,7 @@ export function RequireAuth({
     }
   }, [isAllowed, loading, redirectTo, router]);
 
-  if (!loading && !isAllowed) {
+  if (loading || !isAllowed) {
     return <>{fallback}</>;
   }
 
