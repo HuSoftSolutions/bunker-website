@@ -88,6 +88,7 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
   const [errorMessage, setErrorMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const selectedLocationLabel = useMemo(() => {
     if (!locationId) {
@@ -105,6 +106,7 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
     const locationEmails = parseEmails(target?.careerEmails);
     return locationEmails.length ? locationEmails : settings.careersDefaultRecipients;
   }, [locationId, locations, settings.careersDefaultRecipients]);
+  const sendEmails = settings.careersSendEmails;
 
   const formIsInvalid =
     !firstName.trim() ||
@@ -173,7 +175,7 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
         position: position.trim(),
         skillLevel: skillLevel.trim(),
         message: message.trim(),
-        emailTo: resolvedRecipients,
+        emailTo: sendEmails ? resolvedRecipients : [],
         resumeUrl: resumeMeta?.url ?? null,
         resumeFileName: resumeMeta?.fileName ?? null,
         resumeMimeType: resumeMeta?.mimeType ?? null,
@@ -181,38 +183,49 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
         createdAt: serverTimestamp(),
       });
 
-      const response = await fetch("/api/inquiries/careers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inquiryId: docRef.id,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          location: selectedLocationLabel.trim(),
-          position: position.trim(),
-          skillLevel: skillLevel.trim(),
-          message: message.trim(),
-          resumeUrl: resumeMeta?.url ?? null,
-          resumeFileName: resumeMeta?.fileName ?? null,
-          resumeMimeType: resumeMeta?.mimeType ?? null,
-          emailTo: resolvedRecipients,
-        }),
-      });
+      if (sendEmails) {
+        const response = await fetch("/api/inquiries/careers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inquiryId: docRef.id,
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            location: selectedLocationLabel.trim(),
+            position: position.trim(),
+            skillLevel: skillLevel.trim(),
+            message: message.trim(),
+            resumeUrl: resumeMeta?.url ?? null,
+            resumeFileName: resumeMeta?.fileName ?? null,
+            resumeMimeType: resumeMeta?.mimeType ?? null,
+            emailTo: resolvedRecipients,
+          }),
+        });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body?.error || "Failed to send inquiry.");
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body?.error || "Failed to send inquiry.");
+        }
       }
 
       setSubmitted(true);
       resetForm();
     } catch (error) {
       console.error("[CareerApplicationForm] submit failed", error);
-      setErrorMessage(
-        error instanceof Error ? error.message : "Something went wrong. Please try again.",
-      );
+      const message = (() => {
+        if (error instanceof Error) {
+          if (error.message.includes("SENDGRID_API_KEY")) {
+            return "Email sending isn’t configured right now. Please try again later.";
+          }
+          return error.message;
+        }
+        return "Something went wrong. Please try again.";
+      })();
+
+      setErrorMessage(message);
+      setToastMessage(message);
     } finally {
       setSubmitting(false);
     }
@@ -233,6 +246,26 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
       onSubmit={handleSubmit}
       className={className}
     >
+      {toastMessage ? (
+        <div className="fixed right-4 top-4 z-50 w-full max-w-sm rounded-2xl border border-rose-500/40 bg-zinc-950 px-4 py-3 text-sm text-rose-50 shadow-2xl shadow-black/50">
+          <div className="flex items-start gap-3">
+            <span className="mt-1 inline-flex h-2 w-2 rounded-full bg-rose-300" />
+            <div className="flex-1">
+              <p className="font-semibold uppercase tracking-wide text-rose-100">
+                Request Failed
+              </p>
+              <p className="mt-1 text-rose-100/80">{toastMessage}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="text-xs uppercase tracking-wide text-rose-100/70 transition hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
       <FormCard>
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">

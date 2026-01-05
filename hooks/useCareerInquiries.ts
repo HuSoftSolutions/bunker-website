@@ -10,6 +10,11 @@ import {
   type QuerySnapshot,
   type Timestamp,
 } from "firebase/firestore";
+import {
+  DEFAULT_WORKFLOW_STATUS,
+  parseWorkflowFromData,
+  type InquiryWorkflowStatus,
+} from "@/utils/inquiryWorkflow";
 
 export type CareerInquiry = {
   inquiryId: string;
@@ -26,12 +31,18 @@ export type CareerInquiry = {
   resumeFileName?: string | null;
   resumeMimeType?: string | null;
   createdAtDate?: Date | null;
+  workflowStatus: InquiryWorkflowStatus;
+  workflowAssignedTo: string;
 };
 
 export type UseCareerInquiriesValue = {
   inquiries: CareerInquiry[];
   loading: boolean;
   error: Error | null;
+};
+
+type UseCareerInquiriesOptions = {
+  refreshToken?: number;
 };
 
 function timestampToDate(value: unknown) {
@@ -56,10 +67,14 @@ function normalizeEmails(value: unknown): string[] {
   return Array.from(uniq);
 }
 
-export function useCareerInquiries(firebase: Firebase | null): UseCareerInquiriesValue {
+export function useCareerInquiries(
+  firebase: Firebase | null,
+  options: UseCareerInquiriesOptions = {},
+): UseCareerInquiriesValue {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [records, setRecords] = useState<CareerInquiry[]>([]);
+  const refreshToken = options.refreshToken ?? 0;
 
   useEffect(() => {
     if (!firebase) {
@@ -80,6 +95,7 @@ export function useCareerInquiries(firebase: Firebase | null): UseCareerInquirie
           const createdAtDate =
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
+          const workflow = parseWorkflowFromData(data);
 
           return {
             inquiryId: doc.id,
@@ -98,6 +114,8 @@ export function useCareerInquiries(firebase: Firebase | null): UseCareerInquirie
             resumeMimeType:
               typeof data.resumeMimeType === "string" ? data.resumeMimeType : null,
             createdAtDate,
+            workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
+            workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies CareerInquiry;
         });
 
@@ -113,11 +131,10 @@ export function useCareerInquiries(firebase: Firebase | null): UseCareerInquirie
     );
 
     return () => off();
-  }, [firebase]);
+  }, [firebase, refreshToken]);
 
   return useMemo(
     () => ({ inquiries: records, loading, error }),
     [records, loading, error],
   );
 }
-

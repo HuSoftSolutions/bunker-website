@@ -283,7 +283,7 @@ export default function LandingPage() {
           show={infoModal.showInfoModal}
           hide={() => setShowInfoModal(false)}
           data={infoModal}
-          showConfetti={infoModal?.showConfetti !== false}
+          showConfetti={infoModal?.showConfetti === true}
         />
       ) : null}
     </div>

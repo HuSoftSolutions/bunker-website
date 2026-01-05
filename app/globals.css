@@ -18,6 +18,10 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     background: var(--background);
     color: var(--foreground);
@@ -38,5 +42,30 @@
   .bg-bunker-surface {
     background-color: #050505;
     background-image: var(--bunker-surface-gradient);
+  }
+
+  .scrollbar-elegant {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.6) transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.45);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.7);
   }
 }

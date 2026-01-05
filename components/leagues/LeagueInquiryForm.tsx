@@ -55,6 +55,7 @@ export function LeagueInquiryForm({ firebase, className }: LeagueInquiryFormProp
     () => settings.leaguesDefaultRecipients,
     [settings.leaguesDefaultRecipients],
   );
+  const sendEmails = settings.leaguesSendEmails;
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -141,32 +142,34 @@ export function LeagueInquiryForm({ firebase, className }: LeagueInquiryFormProp
         season: season.trim(),
         players: playerCount,
         message: message.trim() || null,
-        emailTo: recipients,
+        emailTo: sendEmails ? recipients : [],
         createdAt: serverTimestamp(),
       });
 
-      const response = await fetch("/api/inquiries/leagues", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inquiryId: docRef.id,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          location: location.trim(),
-          preferredTime: preferredTime.trim(),
-          preferredTimeDisplay,
-          season: season.trim(),
-          players: playerCount,
-          message: message.trim() || null,
-          emailTo: recipients,
-        }),
-      });
+      if (sendEmails) {
+        const response = await fetch("/api/inquiries/leagues", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inquiryId: docRef.id,
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            location: location.trim(),
+            preferredTime: preferredTime.trim(),
+            preferredTimeDisplay,
+            season: season.trim(),
+            players: playerCount,
+            message: message.trim() || null,
+            emailTo: recipients,
+          }),
+        });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body?.error || "Failed to send inquiry.");
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body?.error || "Failed to send inquiry.");
+        }
       }
 
       setSubmitted(true);

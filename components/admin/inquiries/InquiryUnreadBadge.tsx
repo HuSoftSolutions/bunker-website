@@ -8,6 +8,8 @@ import { useCareerInquiries } from "@/hooks/useCareerInquiries";
 import { useLessonsInquiries } from "@/hooks/useLessonsInquiries";
 import { useLeaguesInquiries } from "@/hooks/useLeaguesInquiries";
 import { useFittingsInquiries } from "@/hooks/useFittingsInquiries";
+import { useMembershipInquiries } from "@/hooks/useMembershipInquiries";
+import { useEventsInquiries } from "@/hooks/useEventsInquiries";
 import {
   ADMIN_INQUIRY_READ_STATE_EVENT,
   ADMIN_INQUIRY_STORAGE_KEYS,
@@ -65,6 +67,8 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
   const lesson = useLessonsInquiries(firebase);
   const league = useLeaguesInquiries(firebase);
   const fitting = useFittingsInquiries(firebase);
+  const membership = useMembershipInquiries(firebase);
+  const events = useEventsInquiries(firebase);
 
   const [version, setVersion] = useState(0);
 
@@ -126,6 +130,24 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
       }, 0);
     }
 
+    if (kind === "membership") {
+      return membership.inquiries.reduce((count, inquiry) => {
+        if (readIds.has(inquiry.inquiryId)) return count;
+        const recordDate = inquiry.createdAtDate ?? null;
+        if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
+        return count + 1;
+      }, 0);
+    }
+
+    if (kind === "event") {
+      return events.inquiries.reduce((count, inquiry) => {
+        if (readIds.has(inquiry.inquiryId)) return count;
+        const recordDate = inquiry.createdAtDate ?? null;
+        if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
+        return count + 1;
+      }, 0);
+    }
+
     return league.inquiries.reduce((count, inquiry) => {
       if (readIds.has(inquiry.inquiryId)) return count;
       const recordDate = inquiry.createdAtDate ?? null;
@@ -133,7 +155,19 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
       return count + 1;
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, storageKeys.lastViewed, storageKeys.readIds, version, franchise.inquiries, career.inquiries, lesson.inquiries, league.inquiries, fitting.inquiries]);
+  }, [
+    kind,
+    storageKeys.lastViewed,
+    storageKeys.readIds,
+    version,
+    franchise.inquiries,
+    career.inquiries,
+    lesson.inquiries,
+    league.inquiries,
+    fitting.inquiries,
+    membership.inquiries,
+    events.inquiries,
+  ]);
 
   if (!unreadCount) {
     return null;

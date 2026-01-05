@@ -11,16 +11,32 @@ import clsx from "clsx";
 import { format } from "date-fns";
 import type Firebase from "@/lib/firebase/client";
 import { useFranchiseInquiries, type FranchiseInquiry } from "@/hooks/useFranchiseInquiries";
+import { useInquirySettings } from "@/hooks/useInquirySettings";
+import {
+  DEFAULT_WORKFLOW_STATUS,
+  type InquiryWorkflowEntry,
+  type InquiryWorkflowStatus,
+  resolveWorkflowStatus,
+} from "@/utils/inquiryWorkflow";
 import { formatPhone } from "@/utils/format";
 import { emitAdminInquiryReadStateChanged } from "@/utils/adminReadState";
+import {
+  InquiryBoard,
+  type InquiryBoardItem,
+} from "./InquiryBoard";
+import { WorkflowControls } from "./WorkflowControls";
+import { doc, updateDoc } from "firebase/firestore";
 
 const LAST_VIEWED_STORAGE_KEY = "admin-franchise-inquiries-last-viewed";
 const READ_IDS_STORAGE_KEY = "admin-franchise-inquiries-read-ids";
+const VIEW_MODE_STORAGE_KEY = "admin-franchise-inquiries-view-mode";
 
 type DateRange = {
   start: string;
   end: string;
 };
+
+type ViewMode = "table" | "board";
 
 function resolveRecordDate(inquiry: FranchiseInquiry) {
   const candidate = inquiry.submittedAtDate ?? inquiry.createdAtDate ?? null;
@@ -63,6 +79,10 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
   const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(null);
   const [lastViewedAt, setLastViewedAt] = useState<Date | null>(null);
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set<string>());
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const { settings } = useInquirySettings(firebase);
+  const boardEnabled = settings.franchiseBoardEnabled;
+  const boardStatuses = settings.franchiseBoardStatuses;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -122,6 +142,37 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
       console.warn("[FranchiseInquiries] failed to persist read-ids state", error);
     }
   }, [readIds]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      if (stored === "board" || stored === "table") {
+        setViewMode(stored);
+      }
+    } catch (error) {
+      console.warn("[FranchiseInquiries] failed to read view-mode state", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch (error) {
+      console.warn("[FranchiseInquiries] failed to persist view-mode state", error);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!boardEnabled && viewMode === "board") {
+      setViewMode("table");
+    }
+  }, [boardEnabled, viewMode]);
 
   const { inquiries, loading, error } = useFranchiseInquiries(firebase, { refreshToken });
 
@@ -209,6 +260,37 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
     return unread;
   }, [inquiries, lastViewedAt, readIds]);
 
+  const boardItems = useMemo<InquiryBoardItem[]>(() => {
+    return filteredInquiries.map((inquiry) => {
+      const locationLabel = [inquiry.city, inquiry.country].filter(Boolean).join(", ");
+      const locationValue = locationLabel || inquiry.targetGeography || "—";
+      return {
+        id: inquiry.inquiryId,
+        title: `${inquiry.firstName} ${inquiry.lastName}`,
+        subtitle: inquiry.franchiseSite ?? "franchise-website",
+        meta: `${inquiry.city}, ${inquiry.country}`,
+        contact: inquiry.email,
+        dateLabel: formatDateForDisplay(resolveRecordDate(inquiry)),
+        dateValue: resolveRecordDate(inquiry),
+        laneValues: {
+          location: locationValue,
+          source: inquiry.referral ?? "—",
+        },
+        unread: unreadInquiryIds.has(inquiry.inquiryId),
+      };
+    });
+  }, [filteredInquiries, unreadInquiryIds]);
+
+  const workflowState = useMemo(() => {
+    return inquiries.reduce<Record<string, InquiryWorkflowEntry>>((acc, inquiry) => {
+      acc[inquiry.inquiryId] = {
+        assignedTo: inquiry.workflowAssignedTo ?? "",
+        status: resolveWorkflowStatus(inquiry.workflowStatus, boardStatuses),
+      };
+      return acc;
+    }, {});
+  }, [inquiries, boardStatuses]);
+
   const hasUnread = unreadInquiryIds.size > 0;
 
   const isFilterActive = Boolean(searchTerm.trim() || dateRange.start || dateRange.end);
@@ -245,18 +327,53 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
     setDateRange({ start: "", end: "" });
   }, []);
 
-  const emailNotificationAlert = (
-    <div className="rounded-2xl border border-primary/40 bg-primary/15 px-4 py-3 text-sm text-primary/90">
-      Franchise inquiries continue to trigger the Firebase Functions + SendGrid
-      notification workflow. Update the <span className="font-semibold">franchise config email</span>{" "}
-      doc if recipients need to change.
-    </div>
+  const updateWorkflow = useCallback(
+    async (
+      inquiryId: string,
+      updates: { status?: InquiryWorkflowStatus; assignedTo?: string },
+    ) => {
+      const inquiry = inquiries.find((item) => item.inquiryId === inquiryId);
+      if (!inquiry) {
+        console.warn("[FranchiseInquiries] attempted to update missing inquiry", inquiryId);
+        return;
+      }
+      const franchiseSite = inquiry.franchiseSite ?? "franchise-website";
+      const payload: Record<string, unknown> = {};
+      if (updates.status) {
+        payload.workflowStatus = updates.status;
+      }
+      if (typeof updates.assignedTo === "string") {
+        payload.workflowAssignedTo = updates.assignedTo.trim();
+      }
+
+      try {
+        await updateDoc(
+          doc(firebase.franchiseInquiriesRef(franchiseSite), inquiryId),
+          payload,
+        );
+      } catch (error) {
+        console.error("[FranchiseInquiries] failed to update workflow", error);
+      }
+    },
+    [firebase, inquiries],
+  );
+
+  const handleStatusChange = useCallback(
+    (inquiryId: string, status: InquiryWorkflowStatus) => {
+      updateWorkflow(inquiryId, { status });
+    },
+    [updateWorkflow],
+  );
+
+  const handleAssigneeChange = useCallback(
+    (inquiryId: string, assignee: string) => {
+      updateWorkflow(inquiryId, { assignedTo: assignee });
+    },
+    [updateWorkflow],
   );
 
   return (
     <div className="space-y-6">
-      {emailNotificationAlert}
-
       <section className="rounded-3xl border border-white/10 bg-zinc-950 shadow-xl shadow-black/40">
         <div className="border-b border-white/10 px-4 py-5 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -295,6 +412,38 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
               >
                 Mark all read
               </button>
+              <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={clsx(
+                    "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide transition",
+                    viewMode === "table"
+                      ? "bg-primary text-white"
+                      : "text-white/70 hover:bg-white/10",
+                  )}
+                >
+                  Table view
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (boardEnabled) {
+                      setViewMode("board");
+                    }
+                  }}
+                  disabled={!boardEnabled}
+                  className={clsx(
+                    "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide transition",
+                    viewMode === "board"
+                      ? "bg-primary text-white"
+                      : "text-white/70 hover:bg-white/10",
+                    boardEnabled ? "" : "cursor-not-allowed text-white/40",
+                  )}
+                >
+                  Board view
+                </button>
+              </div>
             </div>
           </div>
           <div className="mt-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
@@ -365,6 +514,26 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
             <ErrorState onRetry={handleRetry} error={error} />
           ) : filteredInquiries.length === 0 ? (
             <EmptyState hasFilters={isFilterActive} />
+          ) : viewMode === "board" ? (
+            boardStatuses.length ? (
+              <InquiryBoard
+                items={boardItems}
+                workflowState={workflowState}
+                onStatusChange={handleStatusChange}
+                onAssigneeChange={handleAssigneeChange}
+                onMarkRead={handleMarkInquiryRead}
+                allowedStatuses={boardStatuses}
+                lane="status"
+                onOpen={(inquiryId) => {
+                  setSelectedInquiryId(inquiryId);
+                  handleMarkInquiryRead(inquiryId);
+                }}
+              />
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-black/30 px-6 py-10 text-center text-sm text-white/60">
+                No board columns are selected. Update Inquiry Settings to choose columns.
+              </div>
+            )
           ) : (
             <InquiryTable
               inquiries={filteredInquiries}
@@ -372,6 +541,10 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
               onSelect={setSelectedInquiryId}
               unreadInquiryIds={unreadInquiryIds}
               onMarkRead={handleMarkInquiryRead}
+              workflowState={workflowState}
+              onStatusChange={handleStatusChange}
+              onAssigneeChange={handleAssigneeChange}
+              boardStatuses={boardStatuses}
             />
           )}
         </div>
@@ -382,6 +555,10 @@ export function FranchiseInquiriesPanel({ firebase }: FranchiseInquiriesPanelPro
         onClose={() => setSelectedInquiryId(null)}
         isUnread={selectedInquiry ? unreadInquiryIds.has(selectedInquiry.inquiryId) : false}
         onMarkRead={handleMarkInquiryRead}
+        workflowState={workflowState}
+        onStatusChange={handleStatusChange}
+        onAssigneeChange={handleAssigneeChange}
+        boardStatuses={boardStatuses}
       />
     </div>
   );
@@ -439,6 +616,10 @@ type InquiryTableProps = {
   selectedInquiryId: string | null;
   onSelect: (inquiryId: string | null) => void;
   onMarkRead: (inquiryId: string) => void;
+  workflowState: Record<string, InquiryWorkflowEntry>;
+  onStatusChange: (inquiryId: string, status: InquiryWorkflowStatus) => void;
+  onAssigneeChange: (inquiryId: string, assignee: string) => void;
+  boardStatuses: string[];
 };
 
 function InquiryTable({
@@ -447,6 +628,10 @@ function InquiryTable({
   selectedInquiryId,
   onSelect,
   onMarkRead,
+  workflowState,
+  onStatusChange,
+  onAssigneeChange,
+  boardStatuses,
 }: InquiryTableProps) {
   return (
     <div className="overflow-x-auto">
@@ -458,6 +643,7 @@ function InquiryTable({
             <th className="px-4 py-3 font-medium">Location</th>
             <th className="px-4 py-3 font-medium">Focus</th>
             <th className="px-4 py-3 font-medium">Referral</th>
+            <th className="px-4 py-3 font-medium">Workflow</th>
             <th className="px-4 py-3 font-medium">Submitted</th>
           </tr>
         </thead>
@@ -526,6 +712,20 @@ function InquiryTable({
                 <td className="px-4 py-3 text-sm text-white">
                   {inquiry.referral ?? "—"}
                 </td>
+                <td className="px-4 py-3">
+                  <WorkflowControls
+                    inquiryId={inquiry.inquiryId}
+                    entry={
+                      workflowState[inquiry.inquiryId] ?? {
+                        assignedTo: "",
+                        status: DEFAULT_WORKFLOW_STATUS,
+                      }
+                    }
+                    onStatusChange={onStatusChange}
+                    onAssigneeChange={onAssigneeChange}
+                    statuses={boardStatuses}
+                  />
+                </td>
                 <td className="px-4 py-3 text-xs text-white/60">
                   <span title={inquiry.submittedAt ?? undefined}>
                     {formatDateForDisplay(recordDate)}
@@ -545,15 +745,33 @@ type InquiryDrawerProps = {
   onClose: () => void;
   onMarkRead: (inquiryId: string) => void;
   isUnread: boolean;
+  workflowState: Record<string, InquiryWorkflowEntry>;
+  onStatusChange: (inquiryId: string, status: InquiryWorkflowStatus) => void;
+  onAssigneeChange: (inquiryId: string, assignee: string) => void;
+  boardStatuses: string[];
 };
 
-function InquiryDrawer({ inquiry, onClose, onMarkRead, isUnread }: InquiryDrawerProps) {
+function InquiryDrawer({
+  inquiry,
+  onClose,
+  onMarkRead,
+  isUnread,
+  workflowState,
+  onStatusChange,
+  onAssigneeChange,
+  boardStatuses,
+}: InquiryDrawerProps) {
   if (!inquiry) {
     return null;
   }
 
   const submittedDisplay = formatDateForDisplay(resolveRecordDate(inquiry));
   const linkedinUrl = normalizeLinkedInUrl(inquiry.linkedin);
+  const workflowEntry =
+    workflowState[inquiry.inquiryId] ?? {
+      assignedTo: "",
+      status: DEFAULT_WORKFLOW_STATUS,
+    };
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -587,6 +805,20 @@ function InquiryDrawer({ inquiry, onClose, onMarkRead, isUnread }: InquiryDrawer
               Close
             </button>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <WorkflowControls
+            inquiryId={inquiry.inquiryId}
+            entry={workflowEntry}
+            onStatusChange={onStatusChange}
+            onAssigneeChange={onAssigneeChange}
+            layout="inline"
+            statuses={boardStatuses}
+          />
+          <p className="mt-2 text-xs uppercase tracking-wide text-white/50">
+            Current owner: {workflowEntry.assignedTo || "Unassigned"}
+          </p>
         </div>
 
         <div className="mt-6 grid gap-3">

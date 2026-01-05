@@ -3,20 +3,25 @@
 import { useEffect, useState } from "react";
 import type Firebase from "@/lib/firebase/client";
 import { onSnapshot, type DocumentData, type DocumentSnapshot } from "firebase/firestore";
+import type { MembershipFormContent } from "@/data/membershipContent";
 
 export type BusinessSettings = {
   teesheetUrl?: string | null;
   membershipRegistrationUrl?: string | null;
+  membershipPaymentUrl?: string | null;
   membershipHeroImage?: {
     url: string;
     storagePath?: string | null;
   } | null;
+  membershipForm?: MembershipFormContent | null;
 };
 
 const DEFAULT_SETTINGS: BusinessSettings = {
   teesheetUrl: null,
   membershipRegistrationUrl: null,
+  membershipPaymentUrl: null,
   membershipHeroImage: null,
+  membershipForm: null,
 };
 
 export default function useBusinessSettings(firebase: Firebase) {

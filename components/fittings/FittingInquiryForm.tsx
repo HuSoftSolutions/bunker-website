@@ -28,6 +28,7 @@ export function FittingInquiryForm({ firebase, config, className }: FittingInqui
     () => settings.fittingsDefaultRecipients,
     [settings.fittingsDefaultRecipients],
   );
+  const sendEmails = settings.fittingsSendEmails;
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -79,21 +80,23 @@ export function FittingInquiryForm({ firebase, config, className }: FittingInqui
         locationPreference: locationPreference.trim(),
         timePreference: timePreference.trim(),
         notes: notes.trim() || null,
-        emailTo: recipients,
+        emailTo: sendEmails ? recipients : [],
         createdAt: serverTimestamp(),
       };
 
       const docRef = await addDoc(firebase.fittingsInquiriesRef(), payload);
 
-      const response = await fetch("/api/inquiries/fittings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inquiryId: docRef.id, ...payload }),
-      });
+      if (sendEmails) {
+        const response = await fetch("/api/inquiries/fittings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inquiryId: docRef.id, ...payload }),
+        });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body?.error || "Failed to send inquiry.");
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body?.error || "Failed to send inquiry.");
+        }
       }
 
       setSubmitted(true);
@@ -235,4 +238,3 @@ export function FittingInquiryForm({ firebase, config, className }: FittingInqui
     </form>
   );
 }
-

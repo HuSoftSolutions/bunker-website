@@ -1,11 +1,12 @@
 "use client";
 
 import { AdminShell } from "@/components/admin/AdminShell";
-import { ADMIN_NAV_ITEMS } from "@/constants/adminNav";
-import { LOCATION_ADMIN } from "@/constants/routes";
 import {
   CareerInquiriesPanel,
 } from "@/components/admin/inquiries/CareerInquiriesPanel";
+import {
+  EventInquiriesPanel,
+} from "@/components/admin/inquiries/EventInquiriesPanel";
 import {
   FittingInquiriesPanel,
 } from "@/components/admin/inquiries/FittingInquiriesPanel";
@@ -18,8 +19,8 @@ import {
 import {
   LessonInquiriesPanel,
 } from "@/components/admin/inquiries/LessonInquiriesPanel";
-import { InquiryUnreadBadge } from "@/components/admin/inquiries/InquiryUnreadBadge";
 import { LeagueInquiriesPanel } from "@/components/admin/inquiries/LeagueInquiriesPanel";
+import { MembershipInquiriesPanel } from "@/components/admin/inquiries/MembershipInquiriesPanel";
 import { LocationMap } from "@/components/maps/LocationMap";
 import { JuniorGolfSettingsPanel } from "@/components/admin/juniorGolf/JuniorGolfSettingsPanel";
 import { FittingsSettingsPanel } from "@/components/admin/fittings/FittingsSettingsPanel";
@@ -28,16 +29,43 @@ import {
 	FALLBACK_LOCATIONS,
 	FALLBACK_LOCATION_MAP,
 } from "@/data/locationConfig";
+import { DEFAULT_MEMBERSHIP_CONTENT, type MembershipFormContent } from "@/data/membershipContent";
 import useLocations, { mergeLocationRecord } from "@/hooks/useLocations";
 import type Firebase from "@/lib/firebase/client";
 import { useFirebase } from "@/providers/FirebaseProvider";
+import { Button } from "@/ui-kit/button";
+import { Badge } from "@/ui-kit/badge";
+import { Checkbox, CheckboxField } from "@/ui-kit/checkbox";
+import {
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogDescription,
+  DialogTitle,
+} from "@/ui-kit/dialog";
+import { Description, Field, Label } from "@/ui-kit/fieldset";
+import { Heading, Subheading } from "@/ui-kit/heading";
+import { Input } from "@/ui-kit/input";
+import { Switch, SwitchField } from "@/ui-kit/switch";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/ui-kit/table";
+import { Text, TextLink } from "@/ui-kit/text";
+import { Textarea } from "@/ui-kit/textarea";
 import clsx from "clsx";
 import { format } from "date-fns";
+import { toast } from "react-toastify";
 import {
 	useCallback,
 	useEffect,
 	useId,
 	useMemo,
+	useRef,
 	useState,
 	type Dispatch,
 	type SetStateAction,
@@ -51,12 +79,9 @@ type AdminTab =
   | "menus"
   | "beverages"
   | "rates"
-  | "promotions"
   | "ordering"
   | "career"
-  | "images"
   | "map"
-  | "about"
   | "calendar";
 
 type BusinessTab =
@@ -65,24 +90,12 @@ type BusinessTab =
   | "career-inquiries"
   | "lesson-inquiries"
   | "league-inquiries"
+  | "membership-inquiries"
   | "fitting-inquiries"
+  | "event-inquiries"
   | "fittings"
   | "junior-golf"
   | "inquiry-settings";
-
-const TAB_LABELS: Record<AdminTab, string> = {
-  general: "General",
-  menus: "Menus",
-  beverages: "Beverage Menus",
-  rates: "Rates",
-  promotions: "Promotions",
-  calendar: "Calendar",
-  ordering: "Ordering Links",
-  career: "Career Emails",
-  images: "Images",
-  map: "Map",
-  about: "About",
-};
 
 type LocationFormState = Record<string, any> | null;
 
@@ -118,13 +131,17 @@ type MembershipHeroImage = {
 type BusinessSettingsFormState = {
   teesheetUrl?: string;
   membershipRegistrationUrl?: string;
+  membershipPaymentUrl?: string;
   membershipHeroImage?: MembershipHeroImage | null;
+  membershipForm?: MembershipFormContent | null;
 };
 
 const BUSINESS_DEFAULT_STATE: BusinessSettingsFormState = {
   teesheetUrl: "",
   membershipRegistrationUrl: "",
+  membershipPaymentUrl: "",
   membershipHeroImage: null,
+  membershipForm: { ...DEFAULT_MEMBERSHIP_CONTENT },
 };
 
 const cloneBusinessSettingsState = (
@@ -142,6 +159,12 @@ const cloneBusinessSettingsState = (
       membershipHeroImage: parsed?.membershipHeroImage
         ? { ...parsed.membershipHeroImage }
         : null,
+      membershipForm: parsed?.membershipForm
+        ? {
+            ...DEFAULT_MEMBERSHIP_CONTENT,
+            ...parsed.membershipForm,
+          }
+        : { ...DEFAULT_MEMBERSHIP_CONTENT },
     };
   } catch (error) {
     console.warn("[LocationsAdmin] failed to clone business state", error);
@@ -151,6 +174,12 @@ const cloneBusinessSettingsState = (
       membershipHeroImage: value?.membershipHeroImage
         ? { ...value.membershipHeroImage }
         : null,
+      membershipForm: value?.membershipForm
+        ? {
+            ...DEFAULT_MEMBERSHIP_CONTENT,
+            ...value.membershipForm,
+          }
+        : { ...DEFAULT_MEMBERSHIP_CONTENT },
     };
   }
 };
@@ -166,6 +195,42 @@ type BusinessAdminState = {
   reset: () => void;
 };
 
+type NoticeBannerFormState = {
+  showNoticeMsg: boolean;
+  title: string;
+  message: string;
+  link: string;
+  linkText: string;
+};
+
+type InfoModalFormState = {
+  showInfoModal: boolean;
+  showConfetti: boolean;
+  alertMsg: string;
+  title: string;
+  msg: string;
+  link: string;
+  linkText: string;
+  link2: string;
+  linkText2: string;
+};
+
+type NoticeInfoFormState = {
+  noticeMsg: NoticeBannerFormState;
+  infoModal: InfoModalFormState;
+};
+
+type NoticeInfoAdminState = {
+  form: NoticeInfoFormState;
+  loading: boolean;
+  saving: boolean;
+  status: "idle" | "success" | "error";
+  error: Error | null;
+  setForm: Dispatch<SetStateAction<NoticeInfoFormState>>;
+  save: () => Promise<void>;
+  reset: () => void;
+};
+
 function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
   const payload: Record<string, unknown> = {};
 
@@ -173,11 +238,11 @@ function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
     typeof form?.teesheetUrl === "string" ? form.teesheetUrl.trim() : "";
   payload.teesheetUrl = teesheetValue || null;
 
-  const registrationValue =
-    typeof form?.membershipRegistrationUrl === "string"
-      ? form.membershipRegistrationUrl.trim()
+  const paymentValue =
+    typeof form?.membershipPaymentUrl === "string"
+      ? form.membershipPaymentUrl.trim()
       : "";
-  payload.membershipRegistrationUrl = registrationValue || null;
+  payload.membershipPaymentUrl = paymentValue || null;
 
   const heroUrl = form?.membershipHeroImage?.url?.trim();
   if (heroUrl) {
@@ -188,6 +253,177 @@ function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
   } else {
     payload.membershipHeroImage = null;
   }
+
+  const sanitizeText = (value: unknown, fallback: string) =>
+    typeof value === "string" ? value.trim() : fallback;
+  const sanitizeList = (value: unknown, fallback: string[]) =>
+    Array.isArray(value)
+      ? value.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter(Boolean)
+      : fallback;
+
+  const rawMembershipForm = form?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT;
+  payload.membershipForm = {
+    formTitle: sanitizeText(rawMembershipForm.formTitle, DEFAULT_MEMBERSHIP_CONTENT.formTitle),
+    formDescription: sanitizeText(
+      rawMembershipForm.formDescription,
+      DEFAULT_MEMBERSHIP_CONTENT.formDescription,
+    ),
+    agreementTitle: sanitizeText(
+      rawMembershipForm.agreementTitle,
+      DEFAULT_MEMBERSHIP_CONTENT.agreementTitle,
+    ),
+    paymentOptions: sanitizeList(
+      rawMembershipForm.paymentOptions,
+      [...DEFAULT_MEMBERSHIP_CONTENT.paymentOptions],
+    ),
+    perksTitle: sanitizeText(rawMembershipForm.perksTitle, DEFAULT_MEMBERSHIP_CONTENT.perksTitle),
+    perks: sanitizeList(rawMembershipForm.perks, [...DEFAULT_MEMBERSHIP_CONTENT.perks]),
+    detailsTitle: sanitizeText(rawMembershipForm.detailsTitle, DEFAULT_MEMBERSHIP_CONTENT.detailsTitle),
+    details: sanitizeList(rawMembershipForm.details, [...DEFAULT_MEMBERSHIP_CONTENT.details]),
+    membershipTypeLabel: sanitizeText(
+      rawMembershipForm.membershipTypeLabel,
+      DEFAULT_MEMBERSHIP_CONTENT.membershipTypeLabel,
+    ),
+    membershipTypes: sanitizeList(
+      rawMembershipForm.membershipTypes,
+      [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes],
+    ),
+    successTitle: sanitizeText(
+      rawMembershipForm.successTitle,
+      DEFAULT_MEMBERSHIP_CONTENT.successTitle,
+    ),
+    successMessage: sanitizeText(
+      rawMembershipForm.successMessage,
+      DEFAULT_MEMBERSHIP_CONTENT.successMessage,
+    ),
+    paymentLinkLabel: sanitizeText(
+      rawMembershipForm.paymentLinkLabel,
+      DEFAULT_MEMBERSHIP_CONTENT.paymentLinkLabel,
+    ),
+    enrollmentTitle: sanitizeText(
+      rawMembershipForm.enrollmentTitle,
+      DEFAULT_MEMBERSHIP_CONTENT.enrollmentTitle,
+    ),
+    enrollmentSteps: sanitizeList(
+      rawMembershipForm.enrollmentSteps,
+      [...DEFAULT_MEMBERSHIP_CONTENT.enrollmentSteps],
+    ),
+  };
+
+  return payload;
+}
+
+const NOTICE_INFO_DEFAULT_STATE: NoticeInfoFormState = {
+  noticeMsg: {
+    showNoticeMsg: false,
+    title: "",
+    message: "",
+    link: "",
+    linkText: "",
+  },
+  infoModal: {
+    showInfoModal: false,
+    showConfetti: false,
+    alertMsg: "",
+    title: "",
+    msg: "",
+    link: "",
+    linkText: "",
+    link2: "",
+    linkText2: "",
+  },
+};
+
+const cloneNoticeInfoState = (
+  value: NoticeInfoFormState | null | undefined,
+): NoticeInfoFormState => {
+  if (!value) {
+    return JSON.parse(JSON.stringify(NOTICE_INFO_DEFAULT_STATE)) as NoticeInfoFormState;
+  }
+
+  try {
+    return JSON.parse(JSON.stringify(value)) as NoticeInfoFormState;
+  } catch (error) {
+    console.warn("[NoticeInfoAdmin] failed to clone notice info state", error);
+    return {
+      noticeMsg: { ...NOTICE_INFO_DEFAULT_STATE.noticeMsg, ...(value.noticeMsg ?? {}) },
+      infoModal: { ...NOTICE_INFO_DEFAULT_STATE.infoModal, ...(value.infoModal ?? {}) },
+    };
+  }
+};
+
+const normalizeNoticeMsg = (value: unknown): NoticeBannerFormState => {
+  if (!value || typeof value !== "object") {
+    return { ...NOTICE_INFO_DEFAULT_STATE.noticeMsg };
+  }
+
+  const raw = value as Record<string, any>;
+  const message =
+    typeof raw.message === "string"
+      ? raw.message
+      : typeof raw.msg === "string"
+        ? raw.msg
+        : "";
+
+  return {
+    showNoticeMsg: Boolean(raw.showNoticeMsg ?? raw.show ?? raw.enabled),
+    title: typeof raw.title === "string" ? raw.title : "",
+    message,
+    link: typeof raw.link === "string" ? raw.link : "",
+    linkText: typeof raw.linkText === "string" ? raw.linkText : "",
+  };
+};
+
+const normalizeInfoModal = (value: unknown): InfoModalFormState => {
+  if (!value || typeof value !== "object") {
+    return { ...NOTICE_INFO_DEFAULT_STATE.infoModal };
+  }
+
+  const raw = value as Record<string, any>;
+  const message =
+    typeof raw.msg === "string"
+      ? raw.msg
+      : typeof raw.message === "string"
+        ? raw.message
+        : "";
+
+  return {
+    showInfoModal: Boolean(raw.showInfoModal ?? raw.show ?? raw.showModal ?? raw.enabled),
+    showConfetti: raw.showConfetti === true,
+    alertMsg: typeof raw.alertMsg === "string" ? raw.alertMsg : "",
+    title: typeof raw.title === "string" ? raw.title : "",
+    msg: message,
+    link: typeof raw.link === "string" ? raw.link : "",
+    linkText: typeof raw.linkText === "string" ? raw.linkText : "",
+    link2: typeof raw.link2 === "string" ? raw.link2 : "",
+    linkText2: typeof raw.linkText2 === "string" ? raw.linkText2 : "",
+  };
+};
+
+function sanitizeNoticeInfo(form: NoticeInfoFormState | null) {
+  const payload: Record<string, unknown> = {};
+  const banner = form?.noticeMsg ?? NOTICE_INFO_DEFAULT_STATE.noticeMsg;
+  const modal = form?.infoModal ?? NOTICE_INFO_DEFAULT_STATE.infoModal;
+
+  payload.noticeMsg = {
+    showNoticeMsg: Boolean(banner.showNoticeMsg),
+    title: typeof banner.title === "string" ? banner.title.trim() : "",
+    message: typeof banner.message === "string" ? banner.message.trim() : "",
+    link: typeof banner.link === "string" ? banner.link.trim() : "",
+    linkText: typeof banner.linkText === "string" ? banner.linkText.trim() : "",
+  };
+
+  payload.infoModal = {
+    showInfoModal: Boolean(modal.showInfoModal),
+    showConfetti: Boolean(modal.showConfetti),
+    alertMsg: typeof modal.alertMsg === "string" ? modal.alertMsg.trim() : "",
+    title: typeof modal.title === "string" ? modal.title.trim() : "",
+    msg: typeof modal.msg === "string" ? modal.msg.trim() : "",
+    link: typeof modal.link === "string" ? modal.link.trim() : "",
+    linkText: typeof modal.linkText === "string" ? modal.linkText.trim() : "",
+    link2: typeof modal.link2 === "string" ? modal.link2.trim() : "",
+    linkText2: typeof modal.linkText2 === "string" ? modal.linkText2.trim() : "",
+  };
 
   return payload;
 }
@@ -219,6 +455,10 @@ function useBusinessSettingsAdminState(firebase: Firebase): BusinessAdminState {
             typeof data?.membershipRegistrationUrl === "string"
               ? data.membershipRegistrationUrl
               : "";
+          const membershipPaymentUrl =
+            typeof data?.membershipPaymentUrl === "string"
+              ? data.membershipPaymentUrl
+              : "";
           const heroImageData =
             data?.membershipHeroImage && typeof data.membershipHeroImage === "object"
               ? {
@@ -231,11 +471,20 @@ function useBusinessSettingsAdminState(firebase: Firebase): BusinessAdminState {
                       : undefined,
                 }
               : null;
+          const membershipFormData =
+            data?.membershipForm && typeof data.membershipForm === "object"
+              ? data.membershipForm
+              : {};
 
           const nextState = cloneBusinessSettingsState({
             teesheetUrl,
             membershipRegistrationUrl,
+            membershipPaymentUrl,
             membershipHeroImage: heroImageData && heroImageData.url ? heroImageData : null,
+            membershipForm: {
+              ...DEFAULT_MEMBERSHIP_CONTENT,
+              ...membershipFormData,
+            },
           });
           setForm(nextState);
           setInitial(nextState);
@@ -271,6 +520,84 @@ function useBusinessSettingsAdminState(firebase: Firebase): BusinessAdminState {
       setStatus("success");
     } catch (err) {
       console.error("[LocationsAdmin] failed to save business settings", err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setStatus("error");
+    } finally {
+      setSaving(false);
+    }
+  }, [firebase, form]);
+
+  return {
+    form,
+    loading,
+    saving,
+    status,
+    error,
+    setForm,
+    save,
+    reset,
+  };
+}
+
+function useNoticeInfoAdminState(firebase: Firebase): NoticeInfoAdminState {
+  const [form, setForm] = useState<NoticeInfoFormState>(
+    cloneNoticeInfoState(NOTICE_INFO_DEFAULT_STATE),
+  );
+  const [initial, setInitial] = useState<NoticeInfoFormState>(
+    cloneNoticeInfoState(NOTICE_INFO_DEFAULT_STATE),
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setStatus("idle");
+    setError(null);
+
+    const unsubscribe = onSnapshot(
+      firebase.noticeInfoRef(),
+      (snapshot) => {
+          const data = snapshot.exists() ? snapshot.data() : {};
+          const nextState = cloneNoticeInfoState({
+            noticeMsg: normalizeNoticeMsg(data?.noticeMsg),
+            infoModal: normalizeInfoModal(data?.infoModal),
+          });
+          setForm(nextState);
+          setInitial(nextState);
+          setLoading(false);
+        },
+      (err: unknown) => {
+          console.error("[NoticeInfoAdmin] failed to load notice info", err);
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setLoading(false);
+        },
+    );
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [firebase]);
+
+  const reset = useCallback(() => {
+    setForm(cloneNoticeInfoState(initial));
+    setStatus("idle");
+    setError(null);
+  }, [initial]);
+
+  const save = useCallback(async () => {
+    setSaving(true);
+    setStatus("idle");
+    setError(null);
+
+    try {
+      const payload = sanitizeNoticeInfo(form);
+      await setDoc(firebase.noticeInfoRef(), payload, { merge: true });
+      setInitial(cloneNoticeInfoState(form));
+      setStatus("success");
+    } catch (err) {
+      console.error("[NoticeInfoAdmin] failed to save notice info", err);
       setError(err instanceof Error ? err : new Error(String(err)));
       setStatus("error");
     } finally {
@@ -657,17 +984,20 @@ export default function LocationsAdminPage() {
   const searchParams = useSearchParams();
   const { locations, loading } = useLocations(firebase);
   const businessState = useBusinessSettingsAdminState(firebase);
+  const noticeInfoState = useNoticeInfoAdminState(firebase);
 
   const [adminView, setAdminView] = useState<"business" | "location">("location");
   const [businessTab, setBusinessTab] = useState<BusinessTab>("settings");
   const [activeTab, setActiveTab] = useState<AdminTab>("general");
+  const locationParam = searchParams?.get("locationId");
   const [selectedLocationId, setSelectedLocationId] = useState<string>(
-    () => FALLBACK_LOCATIONS[0]?.id ?? "",
+    () => locationParam ?? FALLBACK_LOCATIONS[0]?.id ?? "",
   );
 
   useEffect(() => {
     const viewParam = searchParams?.get("view");
     const tabParam = searchParams?.get("tab");
+    const locationIdParam = searchParams?.get("locationId");
 
     const resolvedView =
       viewParam === "business"
@@ -688,7 +1018,9 @@ export default function LocationsAdminPage() {
       "career-inquiries",
       "lesson-inquiries",
       "league-inquiries",
+      "membership-inquiries",
       "fitting-inquiries",
+      "event-inquiries",
       "fittings",
       "junior-golf",
       "inquiry-settings",
@@ -699,13 +1031,10 @@ export default function LocationsAdminPage() {
       "menus",
       "beverages",
       "rates",
-      "promotions",
       "calendar",
       "ordering",
       "career",
-      "images",
       "map",
-      "about",
     ];
 
     if (!tabParam) return;
@@ -720,7 +1049,11 @@ export default function LocationsAdminPage() {
     if (allowedLocationTabs.includes(tabParam as AdminTab)) {
       setActiveTab(tabParam as AdminTab);
     }
-  }, [searchParams, adminView]);
+
+    if (locationIdParam && locationIdParam !== selectedLocationId) {
+      setSelectedLocationId(locationIdParam);
+    }
+  }, [searchParams, adminView, selectedLocationId]);
 
   useEffect(() => {
     if (!selectedLocationId && locations.length) {
@@ -749,212 +1082,59 @@ export default function LocationsAdminPage() {
 
   const isLoading = loading || docLoading;
 
-  const locationAlertContent = (
-    <div className="space-y-3">
-      {status === "success" ? (
-        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 text-sm text-emerald-200">
-          Location changes saved successfully.
-        </div>
-      ) : null}
-      {status === "error" && error ? (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/15 px-4 py-3 text-sm text-rose-200">
-          {error.message}
-        </div>
-      ) : null}
-      {calendarState.status === "success" ? (
-        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 text-sm text-emerald-200">
-          Calendar updated successfully.
-        </div>
-      ) : null}
-      {calendarState.status === "error" && calendarState.error ? (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/15 px-4 py-3 text-sm text-rose-200">
-          {calendarState.error.message}
-        </div>
-      ) : null}
-    </div>
-  );
+  const toastStatusRef = useRef({
+    location: "idle",
+    calendar: "idle",
+    business: "idle",
+  });
 
-  const businessAlertContent = (
-    <div className="space-y-3">
-      {businessState.status === "success" ? (
-        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/15 px-4 py-3 text-sm text-emerald-200">
-          Business settings saved successfully.
-        </div>
-      ) : null}
-      {businessState.status === "error" && businessState.error ? (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/15 px-4 py-3 text-sm text-rose-200">
-          {businessState.error.message}
-        </div>
-      ) : null}
-    </div>
-  );
+  useEffect(() => {
+    const prev = toastStatusRef.current;
+    if (adminView === "location" && status !== prev.location) {
+      if (status === "success") {
+        toast.success("Location changes saved successfully.");
+      } else if (status === "error" && error) {
+        toast.error(error.message);
+      }
+      prev.location = status;
+    }
 
-  const toolbarContent = (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="inline-flex rounded-full border border-white/10 bg-black/60 p-1">
-        <button
-          type="button"
-          onClick={() => setAdminView("business")}
-          className={clsx(
-            "rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-wide transition",
-            adminView === "business"
-              ? "bg-primary text-white"
-              : "text-white/70 hover:bg-white/10 hover:text-white",
-          )}
-        >
-          Business Settings
-        </button>
-        <button
-          type="button"
-          onClick={() => setAdminView("location")}
-          className={clsx(
-            "rounded-full px-4 py-1 text-xs font-semibold uppercase tracking-wide transition",
-            adminView === "location"
-              ? "bg-primary text-white"
-              : "text-white/70 hover:bg-white/10 hover:text-white",
-          )}
-        >
-          Location Settings
-        </button>
-      </div>
+    if (adminView === "location" && calendarState.status !== prev.calendar) {
+      if (calendarState.status === "success") {
+        toast.success("Calendar updated successfully.");
+      } else if (calendarState.status === "error" && calendarState.error) {
+        toast.error(calendarState.error.message);
+      }
+      prev.calendar = calendarState.status;
+    }
 
-      {adminView === "location" ? (
-        <select
-          value={selectedLocationId}
-          onChange={(event) => setSelectedLocationId(event.target.value)}
-          className="min-w-[220px] rounded-full border border-white/20 bg-black/60 px-4 py-2 text-sm uppercase tracking-wide text-white focus:border-primary focus:outline-none"
-        >
-          {locations.map((location) => (
-            <option key={location.id} value={location.id} className="text-black">
-              {location.name}
-            </option>
-          ))}
-        </select>
-      ) : null}
-    </div>
-  );
+    if (adminView === "business" && businessState.status !== prev.business) {
+      if (businessState.status === "success") {
+        toast.success("Business settings saved successfully.");
+      } else if (businessState.status === "error" && businessState.error) {
+        toast.error(businessState.error.message);
+      }
+      prev.business = businessState.status;
+    }
+  }, [
+    adminView,
+    businessState.error,
+    businessState.status,
+    calendarState.error,
+    calendarState.status,
+    error,
+    status,
+  ]);
+
+  const toolbarContent = null;
 
   return (
     <AdminShell
       title={adminView === "business" ? "Business" : "Locations"}
-      description={
-        adminView === "business"
-          ? "Manage settings and inquiries shared across all locations."
-          : "Manage location content, menus, calendar events, and metadata."
-      }
-      navItems={ADMIN_NAV_ITEMS}
-      activeHref={LOCATION_ADMIN}
       toolbar={toolbarContent}
-      alert={
-        adminView === "business"
-          ? businessTab === "settings"
-            ? businessAlertContent
-            : null
-          : locationAlertContent
-      }
     >
       {adminView === "business" ? (
         <div className="space-y-4">
-          <div className="grid gap-3">
-            <div className="rounded-3xl border border-white/10 bg-black/40 px-4 py-4 shadow-lg shadow-black/20">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/50">
-                Business Settings
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {([["settings", "Business Settings"]] as const).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setBusinessTab(key)}
-                    className={clsx(
-                      "relative w-full rounded-2xl px-4 py-3 text-xs font-semibold uppercase tracking-wide transition",
-                      businessTab === key
-                        ? "bg-primary text-white"
-                        : "bg-white/5 text-white/60 hover:bg-primary/20 hover:text-white",
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-black/40 px-4 py-4 shadow-lg shadow-black/20">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/50">
-                Inquiries
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {(
-                  [
-                    ["franchise-inquiries", "Franchise Inquiries"],
-                    ["career-inquiries", "Career Inquiries"],
-                    ["lesson-inquiries", "Lesson Inquiries"],
-                    ["league-inquiries", "League Inquiries"],
-                    ["fitting-inquiries", "Fitting Inquiries"],
-                    ["inquiry-settings", "Inquiry Settings"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setBusinessTab(key)}
-                    className={clsx(
-                      "relative w-full rounded-2xl px-4 py-3 text-xs font-semibold uppercase tracking-wide transition",
-                      businessTab === key
-                        ? "bg-primary text-white"
-                        : "bg-white/5 text-white/60 hover:bg-primary/20 hover:text-white",
-                    )}
-                  >
-                    {label}
-                    {key === "franchise-inquiries" ? (
-                      <InquiryUnreadBadge firebase={firebase} kind="franchise" />
-                    ) : null}
-                    {key === "career-inquiries" ? (
-                      <InquiryUnreadBadge firebase={firebase} kind="career" />
-                    ) : null}
-                    {key === "lesson-inquiries" ? (
-                      <InquiryUnreadBadge firebase={firebase} kind="lesson" />
-                    ) : null}
-                    {key === "league-inquiries" ? (
-                      <InquiryUnreadBadge firebase={firebase} kind="league" />
-                    ) : null}
-                    {key === "fitting-inquiries" ? (
-                      <InquiryUnreadBadge firebase={firebase} kind="fitting" />
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-black/40 px-4 py-4 shadow-lg shadow-black/20">
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/50">
-                Page Management
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {(
-                  [
-                    ["fittings", "Fittings"],
-                    ["junior-golf", "Junior Golf"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setBusinessTab(key)}
-                    className={clsx(
-                      "relative w-full rounded-2xl px-4 py-3 text-xs font-semibold uppercase tracking-wide transition",
-                      businessTab === key
-                        ? "bg-primary text-white"
-                        : "bg-white/5 text-white/60 hover:bg-primary/20 hover:text-white",
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {businessTab === "settings" ? (
             <BusinessSettingsPanel
               form={businessState.form}
@@ -964,6 +1144,12 @@ export default function LocationsAdminPage() {
               onSave={businessState.save}
               onReset={businessState.reset}
               firebase={firebase}
+              noticeForm={noticeInfoState.form}
+              setNoticeForm={noticeInfoState.setForm}
+              noticeLoading={noticeInfoState.loading}
+              noticeSaving={noticeInfoState.saving}
+              onSaveNotice={noticeInfoState.save}
+              onResetNotice={noticeInfoState.reset}
             />
           ) : null}
 
@@ -983,8 +1169,16 @@ export default function LocationsAdminPage() {
             <LeagueInquiriesPanel firebase={firebase} />
           ) : null}
 
+          {businessTab === "membership-inquiries" ? (
+            <MembershipInquiriesPanel firebase={firebase} />
+          ) : null}
+
           {businessTab === "fitting-inquiries" ? (
             <FittingInquiriesPanel firebase={firebase} />
+          ) : null}
+
+          {businessTab === "event-inquiries" ? (
+            <EventInquiriesPanel firebase={firebase} />
           ) : null}
 
           {businessTab === "fittings" ? (
@@ -1000,47 +1194,27 @@ export default function LocationsAdminPage() {
           ) : null}
         </div>
       ) : (
-        <div className="rounded-3xl border border-white/10   bg-zinc-950 shadow-xl shadow-black/30">
-        <div className="border-b border-white/10 px-4 sm:px-6">
-          <div className="flex flex-wrap gap-2 py-4">
-            {(Object.keys(TAB_LABELS) as AdminTab[]).map((tabKey) => (
-              <button
-                key={tabKey}
-                type="button"
-                onClick={() => setActiveTab(tabKey)}
-                className={clsx(
-                  "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
-                  activeTab === tabKey
-                    ? "bg-primary text-white"
-                    : "bg-white/5 text-white/60 hover:bg-primary/20 hover:text-white",
-                )}
-              >
-                {TAB_LABELS[tabKey]}
-              </button>
-            ))}
+        <div className="rounded-3xl border border-white/10 bg-zinc-950 shadow-xl shadow-black/30">
+          <div className="p-6">
+            {isLoading ? (
+              <p className="text-sm text-white/60">Loading locations…</p>
+            ) : form ? (
+              <TabContent
+                tab={activeTab}
+                form={form}
+                setForm={setForm}
+                saving={saving}
+                onSave={save}
+                onReset={reset}
+                firebase={firebase}
+                calendarState={calendarState}
+                defaultLocationName={form?.name ?? selectedLocation?.name ?? ""}
+              />
+            ) : (
+              <p className="text-sm text-white/60">Select a location to begin editing.</p>
+            )}
           </div>
         </div>
-
-        <div className="p-6">
-          {isLoading ? (
-            <p className="text-sm text-white/60">Loading locations…</p>
-          ) : form ? (
-            <TabContent
-              tab={activeTab}
-              form={form}
-              setForm={setForm}
-              saving={saving}
-              onSave={save}
-              onReset={reset}
-              firebase={firebase}
-              calendarState={calendarState}
-              defaultLocationName={form?.name ?? selectedLocation?.name ?? ""}
-            />
-          ) : (
-            <p className="text-sm text-white/60">Select a location to begin editing.</p>
-          )}
-        </div>
-      </div>
       )}
     </AdminShell>
   );
@@ -1054,6 +1228,12 @@ type BusinessSettingsPanelProps = {
   onSave: () => Promise<void>;
   onReset: () => void;
   firebase: Firebase;
+  noticeForm: NoticeInfoFormState;
+  setNoticeForm: Dispatch<SetStateAction<NoticeInfoFormState>>;
+  noticeLoading: boolean;
+  noticeSaving: boolean;
+  onSaveNotice: () => Promise<void>;
+  onResetNotice: () => void;
 };
 
 function BusinessSettingsPanel({
@@ -1064,12 +1244,40 @@ function BusinessSettingsPanel({
   onSave,
   onReset,
   firebase,
+  noticeForm,
+  setNoticeForm,
+  noticeLoading,
+  noticeSaving,
+  onSaveNotice,
+  onResetNotice,
 }: BusinessSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<"general" | "membership">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "membership" | "notices">("general");
   const [heroUpload, setHeroUpload] = useState<{ status: "idle" | "uploading" | "success" | "error"; message?: string }>({
     status: "idle",
   });
   const heroInputId = useId();
+  const membershipForm = form?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT;
+
+  const listToText = (value: string[]) => value.join("\n");
+  const textToList = (value: string) =>
+    value
+      .split("\n")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+  const updateMembershipForm = useCallback(
+    (field: keyof MembershipFormContent, value: string | string[]) => {
+      setForm((prev) => ({
+        ...(prev ?? {}),
+        membershipForm: {
+          ...DEFAULT_MEMBERSHIP_CONTENT,
+          ...(prev?.membershipForm ?? {}),
+          [field]: value,
+        },
+      }));
+    },
+    [setForm],
+  );
 
   const handleInputChange = useCallback(
     (value: string) => {
@@ -1081,11 +1289,11 @@ function BusinessSettingsPanel({
     [setForm],
   );
 
-  const handleRegistrationChange = useCallback(
+  const handlePaymentLinkChange = useCallback(
     (value: string) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipRegistrationUrl: value,
+        membershipPaymentUrl: value,
       }));
     },
     [setForm],
@@ -1132,77 +1340,104 @@ function BusinessSettingsPanel({
     setHeroUpload({ status: "idle" });
   }, [setForm]);
 
+  const bannerToggleId = useId();
+  const modalToggleId = useId();
+  const confettiToggleId = useId();
+
+  const noticeBanner =
+    noticeForm?.noticeMsg ?? cloneNoticeInfoState(NOTICE_INFO_DEFAULT_STATE).noticeMsg;
+  const infoModal =
+    noticeForm?.infoModal ?? cloneNoticeInfoState(NOTICE_INFO_DEFAULT_STATE).infoModal;
+
+  const updateNotice = useCallback(
+    (section: "noticeMsg" | "infoModal", field: string, value: unknown) => {
+      setNoticeForm((prev) => ({
+        ...(prev ?? cloneNoticeInfoState(NOTICE_INFO_DEFAULT_STATE)),
+        [section]: {
+          ...(prev?.[section as keyof NoticeInfoFormState] ??
+            cloneNoticeInfoState(NOTICE_INFO_DEFAULT_STATE)[section]),
+          [field]: value,
+        },
+      }));
+    },
+    [setNoticeForm],
+  );
+
+  const tabSaving = activeTab === "notices" ? noticeSaving : saving;
+  const tabLoading = activeTab === "notices" ? noticeLoading : loading;
+
   return (
     <div className="rounded-3xl border border-white/10   bg-zinc-950 shadow-xl shadow-black/30">
       <div className="border-b border-white/10 px-6 py-5">
-        <h2 className="text-lg font-semibold uppercase tracking-wide text-white">
+        <Heading level={2} className="text-lg uppercase tracking-wide text-white">
           Business Settings
-        </h2>
-        <p className="mt-2 text-xs uppercase tracking-wide text-white/50">
+        </Heading>
+        <Text className="mt-2 text-xs uppercase tracking-wide text-white/60">
           Configure defaults shared across all locations.
-        </p>
+        </Text>
       </div>
 
       <div className="border-b border-white/10 px-6">
         <div className="flex flex-wrap gap-2 py-4">
-          <button
-            type="button"
+          <Button
+            plain
             onClick={() => setActiveTab("general")}
             className={clsx(
-              "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
-              activeTab === "general"
-                ? "bg-primary text-white"
-                : "bg-white/5 text-white/60 hover:bg-primary/20 hover:text-white",
+              "uppercase tracking-wide",
+              activeTab === "general" ? "bg-white/10 text-white" : "text-white/60",
             )}
           >
             General
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            plain
             onClick={() => setActiveTab("membership")}
             className={clsx(
-              "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
-              activeTab === "membership"
-                ? "bg-primary text-white"
-                : "bg-white/5 text-white/60 hover:bg-primary/20 hover:text-white",
+              "uppercase tracking-wide",
+              activeTab === "membership" ? "bg-white/10 text-white" : "text-white/60",
             )}
           >
             Membership
-          </button>
+          </Button>
+          <Button
+            plain
+            onClick={() => setActiveTab("notices")}
+            className={clsx(
+              "uppercase tracking-wide",
+              activeTab === "notices" ? "bg-white/10 text-white" : "text-white/60",
+            )}
+          >
+            Notices
+          </Button>
         </div>
       </div>
 
       <div className="space-y-6 p-6">
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
+          <Button
+            color="red"
             onClick={() => {
-              void onSave();
+              void (activeTab === "notices" ? onSaveNotice() : onSave());
             }}
-            disabled={saving || loading}
-            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-primary/40"
+            disabled={tabSaving || tabLoading}
           >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={saving || loading}
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            {tabSaving ? "Saving…" : "Save changes"}
+          </Button>
+          <Button
+            outline
+            onClick={activeTab === "notices" ? onResetNotice : onReset}
+            disabled={tabSaving || tabLoading}
           >
             Reset
-          </button>
+          </Button>
         </div>
 
         {activeTab === "general" ? (
-          <div className="space-y-2">
-            <label
-              htmlFor="business-teesheet-url"
-              className="block text-xs font-semibold uppercase tracking-wide text-white/60"
-            >
-              Default teesheet link
-            </label>
-            <input
+          <FormField
+            label="Default teesheet link"
+            hint="Shown when “Book Now” is used outside a specific location."
+          >
+            <Input
               id="business-teesheet-url"
               type="url"
               inputMode="url"
@@ -1211,47 +1446,36 @@ function BusinessSettingsPanel({
               value={form?.teesheetUrl ?? ""}
               onChange={(event) => handleInputChange(event.target.value)}
               disabled={loading}
-              className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none transition focus:border-primary focus:ring-0 disabled:cursor-not-allowed disabled:text-white/40"
             />
-            <p className="text-xs text-white/40">
-              Shown when “Book Now” is used outside a specific location.
-            </p>
-          </div>
+          </FormField>
         ) : null}
 
         {activeTab === "membership" ? (
           <div className="space-y-6">
-            <div className="space-y-2">
-              <label
-                htmlFor="business-membership-link"
-                className="block text-xs font-semibold uppercase tracking-wide text-white/60"
-              >
-                Membership registration link
-              </label>
-              <input
-                id="business-membership-link"
+            <FormField
+              label="Membership payment link"
+              hint="Shown after form submission so members can complete payment."
+            >
+              <Input
+                id="business-membership-payment-link"
                 type="url"
                 inputMode="url"
                 autoComplete="off"
-                placeholder="https://forms.gle/your-form"
-                value={form?.membershipRegistrationUrl ?? ""}
-                onChange={(event) => handleRegistrationChange(event.target.value)}
+                placeholder="https://example.com/checkout"
+                value={form?.membershipPaymentUrl ?? ""}
+                onChange={(event) => handlePaymentLinkChange(event.target.value)}
                 disabled={loading}
-                className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none transition focus:border-primary focus:ring-0 disabled:cursor-not-allowed disabled:text-white/40"
               />
-              <p className="text-xs text-white/40">
-                Controls the “Sign Up Now” buttons on the public membership page.
-              </p>
-            </div>
+            </FormField>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                <Text className="text-xs uppercase tracking-wide text-white/60">
                   Membership hero image
-                </p>
-                <p className="text-xs text-white/40">
+                </Text>
+                <Text className="text-xs text-white/60">
                   Upload a 16:9 image. If left blank, the site will use the default placeholder.
-                </p>
+                </Text>
               </div>
 
               {form?.membershipHeroImage?.url ? (
@@ -1264,29 +1488,29 @@ function BusinessSettingsPanel({
                     />
                   </div>
                   <div className="flex items-center justify-between gap-3 px-4 py-3">
-                    <span className="text-xs text-white/50">Preview</span>
-                    <button
-                      type="button"
-                      onClick={handleHeroRemove}
-                      className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10"
-                    >
+                    <Text className="text-xs text-white/50">Preview</Text>
+                    <Button outline onClick={handleHeroRemove}>
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
-                <div className="flex aspect-[16/9] w-full items-center justify-center rounded-2xl border border-dashed border-white/20 bg-black/40 text-xs text-white/40">
-                  No image uploaded
+                <div className="flex aspect-[16/9] w-full items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/40">
+                  <Text className="text-xs text-white/60">No image uploaded</Text>
                 </div>
               )}
 
               <div className="flex flex-wrap items-center gap-3">
-                <label
-                  htmlFor={heroInputId}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary-dark"
+                <Button
+                  color="red"
+                  onClick={() => {
+                    const element = document.getElementById(heroInputId) as HTMLInputElement | null;
+                    element?.click();
+                  }}
+                  disabled={loading}
                 >
                   Upload Image
-                </label>
+                </Button>
                 <input
                   id={heroInputId}
                   type="file"
@@ -1303,19 +1527,372 @@ function BusinessSettingsPanel({
                 />
 
                 {heroUpload.status === "uploading" ? (
-                  <p className="text-xs uppercase tracking-wide text-white/60">Uploading...</p>
+                  <Text className="text-xs uppercase tracking-wide text-white/60">Uploading...</Text>
                 ) : null}
                 {heroUpload.status === "success" ? (
-                  <p className="text-xs uppercase tracking-wide text-emerald-300">
+                  <Text className="text-xs uppercase tracking-wide text-emerald-300">
                     {heroUpload.message || "Uploaded"}
-                  </p>
+                  </Text>
                 ) : null}
                 {heroUpload.status === "error" ? (
-                  <p className="text-xs uppercase tracking-wide text-rose-300">
+                  <Text className="text-xs uppercase tracking-wide text-rose-300">
                     {heroUpload.message || "Upload failed"}
-                  </p>
+                  </Text>
                 ) : null}
               </div>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                Form Copy
+              </Subheading>
+              <FormField label="Form title">
+                <Input
+                  type="text"
+                  value={membershipForm.formTitle}
+                  onChange={(event) => updateMembershipForm("formTitle", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Form description">
+                <Textarea
+                  rows={3}
+                  value={membershipForm.formDescription}
+                  onChange={(event) => updateMembershipForm("formDescription", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                Agreement Copy
+              </Subheading>
+              <FormField label="Agreement title">
+                <Input
+                  type="text"
+                  value={membershipForm.agreementTitle}
+                  onChange={(event) => updateMembershipForm("agreementTitle", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Payment options" hint="One option per line.">
+                <Textarea
+                  rows={4}
+                  value={listToText(membershipForm.paymentOptions)}
+                  onChange={(event) =>
+                    updateMembershipForm("paymentOptions", textToList(event.target.value))
+                  }
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Perks title">
+                <Input
+                  type="text"
+                  value={membershipForm.perksTitle}
+                  onChange={(event) => updateMembershipForm("perksTitle", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Perks list" hint="One perk per line.">
+                <Textarea
+                  rows={5}
+                  value={listToText(membershipForm.perks)}
+                  onChange={(event) =>
+                    updateMembershipForm("perks", textToList(event.target.value))
+                  }
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Details title">
+                <Input
+                  type="text"
+                  value={membershipForm.detailsTitle}
+                  onChange={(event) => updateMembershipForm("detailsTitle", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Details list" hint="One detail per line.">
+                <Textarea
+                  rows={5}
+                  value={listToText(membershipForm.details)}
+                  onChange={(event) =>
+                    updateMembershipForm("details", textToList(event.target.value))
+                  }
+                  disabled={loading}
+                />
+              </FormField>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                Membership Types
+              </Subheading>
+              <FormField label="Membership type label">
+                <Input
+                  type="text"
+                  value={membershipForm.membershipTypeLabel}
+                  onChange={(event) => updateMembershipForm("membershipTypeLabel", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Membership types" hint="One option per line.">
+                <Textarea
+                  rows={4}
+                  value={listToText(membershipForm.membershipTypes)}
+                  onChange={(event) =>
+                    updateMembershipForm("membershipTypes", textToList(event.target.value))
+                  }
+                  disabled={loading}
+                />
+              </FormField>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                Enrollment Copy
+              </Subheading>
+              <FormField label="Enrollment title">
+                <Input
+                  type="text"
+                  value={membershipForm.enrollmentTitle}
+                  onChange={(event) => updateMembershipForm("enrollmentTitle", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Enrollment steps" hint="One step per line.">
+                <Textarea
+                  rows={3}
+                  value={listToText(membershipForm.enrollmentSteps)}
+                  onChange={(event) =>
+                    updateMembershipForm("enrollmentSteps", textToList(event.target.value))
+                  }
+                  disabled={loading}
+                />
+              </FormField>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                Confirmation Copy
+              </Subheading>
+              <FormField label="Success title">
+                <Input
+                  type="text"
+                  value={membershipForm.successTitle}
+                  onChange={(event) => updateMembershipForm("successTitle", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Success message">
+                <Textarea
+                  rows={3}
+                  value={membershipForm.successMessage}
+                  onChange={(event) => updateMembershipForm("successMessage", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+              <FormField label="Payment link label">
+                <Input
+                  type="text"
+                  value={membershipForm.paymentLinkLabel}
+                  onChange={(event) => updateMembershipForm("paymentLinkLabel", event.target.value)}
+                  disabled={loading}
+                />
+              </FormField>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === "notices" ? (
+          <div className="space-y-6">
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <div className="flex items-center justify-between">
+                <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                  Notice Banner
+                </Subheading>
+                <SwitchField className="w-auto">
+                  <Label htmlFor={bannerToggleId} className="text-xs uppercase tracking-wide text-white/70">
+                    Display banner
+                  </Label>
+                  <Switch
+                    id={bannerToggleId}
+                    checked={noticeBanner.showNoticeMsg}
+                    onChange={(value) =>
+                      updateNotice("noticeMsg", "showNoticeMsg", value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </SwitchField>
+              </div>
+
+              <FormGrid columns={2}>
+                <FormField label="Title">
+                  <Input
+                    type="text"
+                    value={noticeBanner.title}
+                    onChange={(event) =>
+                      updateNotice("noticeMsg", "title", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+
+                <FormField label="Link label">
+                  <Input
+                    type="text"
+                    value={noticeBanner.linkText}
+                    onChange={(event) =>
+                      updateNotice("noticeMsg", "linkText", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+              </FormGrid>
+
+              <FormField label="Message">
+                <Textarea
+                  value={noticeBanner.message}
+                  onChange={(event) =>
+                    updateNotice("noticeMsg", "message", event.target.value)
+                  }
+                  disabled={tabLoading}
+                  rows={4}
+                />
+              </FormField>
+
+              <FormField label="Link URL">
+                <Input
+                  type="url"
+                  value={noticeBanner.link}
+                  onChange={(event) =>
+                    updateNotice("noticeMsg", "link", event.target.value)
+                  }
+                  disabled={tabLoading}
+                />
+              </FormField>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                    Landing Page Modal
+                  </Subheading>
+                  <Text className="text-xs text-white/60">
+                    Controls the popup shown on the public landing page.
+                  </Text>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <SwitchField className="w-auto">
+                    <Label htmlFor={modalToggleId} className="text-xs uppercase tracking-wide text-white/70">
+                      Show modal
+                    </Label>
+                    <Switch
+                      id={modalToggleId}
+                      checked={infoModal.showInfoModal}
+                      onChange={(value) =>
+                        updateNotice("infoModal", "showInfoModal", value)
+                      }
+                      disabled={tabLoading}
+                    />
+                  </SwitchField>
+                  <SwitchField className="w-auto">
+                    <Label htmlFor={confettiToggleId} className="text-xs uppercase tracking-wide text-white/70">
+                      Show confetti
+                    </Label>
+                    <Switch
+                      id={confettiToggleId}
+                      checked={infoModal.showConfetti}
+                      onChange={(value) =>
+                        updateNotice("infoModal", "showConfetti", value)
+                      }
+                      disabled={tabLoading}
+                    />
+                  </SwitchField>
+                </div>
+              </div>
+
+              <FormGrid columns={2}>
+                <FormField label="Alert">
+                  <Input
+                    type="text"
+                    value={infoModal.alertMsg}
+                    onChange={(event) =>
+                      updateNotice("infoModal", "alertMsg", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+
+                <FormField label="Title">
+                  <Input
+                    type="text"
+                    value={infoModal.title}
+                    onChange={(event) =>
+                      updateNotice("infoModal", "title", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+              </FormGrid>
+
+              <FormField label="Message">
+                <Textarea
+                  value={infoModal.msg}
+                  onChange={(event) =>
+                    updateNotice("infoModal", "msg", event.target.value)
+                  }
+                  disabled={tabLoading}
+                  rows={5}
+                />
+              </FormField>
+
+              <FormGrid columns={2}>
+                <FormField label="Primary link label">
+                  <Input
+                    type="text"
+                    value={infoModal.linkText}
+                    onChange={(event) =>
+                      updateNotice("infoModal", "linkText", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+                <FormField label="Primary link URL">
+                  <Input
+                    type="url"
+                    value={infoModal.link}
+                    onChange={(event) =>
+                      updateNotice("infoModal", "link", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+              </FormGrid>
+
+              <FormGrid columns={2}>
+                <FormField label="Secondary link label">
+                  <Input
+                    type="text"
+                    value={infoModal.linkText2}
+                    onChange={(event) =>
+                      updateNotice("infoModal", "linkText2", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+                <FormField label="Secondary link URL">
+                  <Input
+                    type="url"
+                    value={infoModal.link2}
+                    onChange={(event) =>
+                      updateNotice("infoModal", "link2", event.target.value)
+                    }
+                    disabled={tabLoading}
+                  />
+                </FormField>
+              </FormGrid>
             </div>
           </div>
         ) : null}
@@ -1366,24 +1943,22 @@ function TabContent({
     <div className="space-y-6">
       {!isBeveragesTab ? (
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
+          <Button
+            color="red"
             onClick={() => {
               void handleSave();
             }}
             disabled={activeSaving || isCalendarLoading}
-            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:bg-primary/40"
           >
             {activeSaving ? "Saving…" : "Save changes"}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            outline
             onClick={handleReset}
             disabled={activeSaving}
-            className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Reset
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -1416,13 +1991,6 @@ function TabContent({
         />
       ) : null}
 
-      {tab === "promotions" ? (
-        <PromotionsTab
-          promotions={Array.isArray(form.promotions) ? form.promotions : []}
-          onChange={(promotions) => handleInputChange("promotions", promotions)}
-        />
-      ) : null}
-
       {tab === "calendar" ? (
         <CalendarTab
           events={calendarState.events}
@@ -1444,13 +2012,6 @@ function TabContent({
         />
       ) : null}
 
-      {tab === "images" ? (
-        <ImagesTab
-          images={Array.isArray(form.images) ? form.images : []}
-          onChange={(images) => handleInputChange("images", images)}
-        />
-      ) : null}
-
       {tab === "map" ? (
         <MapTab
           coordinates={form.coordinates ?? { lat: "", lng: "" }}
@@ -1459,12 +2020,6 @@ function TabContent({
         />
       ) : null}
 
-      {tab === "about" ? (
-        <AboutTab
-          about={form.about ?? ""}
-          onChange={(value) => handleInputChange("about", value)}
-        />
-      ) : null}
     </div>
   );
 }
@@ -1503,123 +2058,105 @@ function GeneralTab({ form, onChange }: GeneralTabProps) {
     <div className="space-y-6">
       <FormGrid columns={2}>
         <FormField label="Location Name">
-          <input
+          <Input
             type="text"
             value={form.name ?? ""}
             onChange={(event) => onChange("name", event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
         <FormField label="Phone">
-          <input
+          <Input
             type="text"
             value={form.phone ?? ""}
             onChange={(event) => onChange("phone", event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
         <FormField label="Email">
-          <input
+          <Input
             type="email"
             value={form.email ?? ""}
             onChange={(event) => onChange("email", event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
         <FormField label="Booking URL">
-          <input
+          <Input
             type="text"
             value={form.url ?? ""}
             onChange={(event) => onChange("url", event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
       </FormGrid>
 
       <FormField label="Address">
-        <textarea
+        <Textarea
           value={form.address ?? ""}
           onChange={(event) => onChange("address", event.target.value)}
-          className="min-h-[80px] w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+          rows={4}
         />
       </FormField>
 
       <FormField label="Hours">
-        <input
+        <Input
           type="text"
           value={form.hoursFull ?? ""}
           onChange={(event) => onChange("hoursFull", event.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
         />
       </FormField>
 
-      <FormField
-        label="Highlight New Items"
-        hint="Toggles the 'New Items' badge for this location."
-      >
-        <div className="flex items-center gap-3">
-          <input
-            id={newItemsToggleId}
-            type="checkbox"
-            checked={Boolean(form.newItems)}
-            onChange={(event) => onChange("newItems", event.target.checked)}
-            className="h-5 w-5 rounded border border-white/20 bg-black/60 text-primary focus:ring-primary"
-          />
-          <label htmlFor={newItemsToggleId} className="text-sm text-white/70">
-            Show "New Items" callout on the landing page.
-          </label>
-        </div>
-      </FormField>
+      <SwitchField>
+        <Label htmlFor={newItemsToggleId}>Highlight New Items</Label>
+        <Description>Toggles the "New Items" badge for this location.</Description>
+        <Switch
+          id={newItemsToggleId}
+          checked={Boolean(form.newItems)}
+          onChange={(value) => onChange("newItems", value)}
+        />
+      </SwitchField>
 
       <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
+        <div className="flex items-center justify-between gap-4">
+          <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
             Notice Banner
-          </h3>
-          <div className="flex items-center gap-2">
-            <input
-              id={noticeToggleId}
-              type="checkbox"
-              checked={notice.showNoticeMsg}
-              onChange={(event) => updateNotice("showNoticeMsg", event.target.checked)}
-              className="h-5 w-5 rounded border border-white/20 bg-black/60 text-primary focus:ring-primary"
-            />
-            <label htmlFor={noticeToggleId} className="text-xs uppercase tracking-wide text-white/70">
+          </Subheading>
+          <SwitchField className="w-auto">
+            <Label htmlFor={noticeToggleId} className="text-xs uppercase tracking-wide text-white/70">
               Display banner
-            </label>
-          </div>
+            </Label>
+            <Switch
+              id={noticeToggleId}
+              checked={notice.showNoticeMsg}
+              onChange={(value) => updateNotice("showNoticeMsg", value)}
+            />
+          </SwitchField>
         </div>
         <FormGrid columns={2}>
           <FormField label="Notice Title">
-            <input
+            <Input
               type="text"
               value={notice.title}
               onChange={(event) => updateNotice("title", event.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
             />
           </FormField>
           <FormField label="Notice Link Label">
-            <input
+            <Input
               type="text"
               value={notice.linkText}
               onChange={(event) => updateNotice("linkText", event.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
             />
           </FormField>
         </FormGrid>
         <FormField label="Notice Message">
-          <textarea
+          <Textarea
             value={notice.message}
             onChange={(event) => updateNotice("message", event.target.value)}
-            className="min-h-[100px] w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+            rows={5}
           />
         </FormField>
         <FormField label="Notice Link URL">
-          <input
+          <Input
             type="text"
             value={notice.link}
             onChange={(event) => updateNotice("link", event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
       </div>
@@ -1656,13 +2193,11 @@ function FormField({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-2 text-sm">
-      <span className="font-semibold uppercase tracking-wide text-white/80">
-        {label}
-      </span>
+    <Field>
+      <Label>{label}</Label>
       {children}
-      {hint ? <span className="text-xs text-white/50">{hint}</span> : null}
-    </label>
+      {hint ? <Description>{hint}</Description> : null}
+    </Field>
   );
 }
 
@@ -1686,29 +2221,14 @@ type MenusTabProps = {
 };
 
 function MenusTab({ menus, onChange, firebase, locationId }: MenusTabProps) {
-  const [uploadStates, setUploadStates] = useState<UploadState[]>(() =>
-    menus.map(() => ({ status: "idle" })),
-  );
-
-  const ensureUploadStateLength = useCallback(
-    (updater?: (draft: UploadState[]) => UploadState[]) => {
-      setUploadStates((prev) => {
-        const draft = updater ? updater([...prev]) : [...prev];
-        while (draft.length < menus.length) {
-          draft.push({ status: "idle" });
-        }
-        if (draft.length > menus.length) {
-          draft.length = menus.length;
-        }
-        return draft;
-      });
-    },
-    [menus.length],
-  );
-
-  useEffect(() => {
-    ensureUploadStateLength();
-  }, [ensureUploadStateLength, menus.length]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [draft, setDraft] = useState<MenuEntry>({
+    name: "",
+    pdf: "",
+    storagePath: "",
+  });
+  const [uploadState, setUploadState] = useState<UploadState>({ status: "idle" });
 
   const updateMenuAt = useCallback(
     (index: number, partial: Partial<MenuEntry>) => {
@@ -1720,61 +2240,43 @@ function MenusTab({ menus, onChange, firebase, locationId }: MenusTabProps) {
     [menus, onChange],
   );
 
-  const handleNameChange = useCallback(
-    (index: number, value: string) => {
-      updateMenuAt(index, { name: value });
-    },
-    [updateMenuAt],
-  );
-
   const addMenu = () => {
-    onChange([
-      ...menus,
-      { name: "", pdf: "", storagePath: "" },
-    ]);
-    ensureUploadStateLength((draft) => {
-      draft.push({ status: "idle" });
-      return draft;
-    });
+    setDraft({ name: "", pdf: "", storagePath: "" });
+    setEditingIndex(null);
+    setUploadState({ status: "idle" });
+    setModalOpen(true);
   };
 
   const removeMenu = (index: number) => {
     onChange(menus.filter((_, idx) => idx !== index));
-    ensureUploadStateLength((draft) => draft.filter((_, idx) => idx !== index));
   };
 
-  const moveMenu = (index: number, direction: -1 | 1) => {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= menus.length) {
+  const openEdit = (index: number) => {
+    const menu = menus[index];
+    if (!menu) {
       return;
     }
-
-    const nextMenus = [...menus];
-    const [item] = nextMenus.splice(index, 1);
-    nextMenus.splice(targetIndex, 0, item);
-    onChange(nextMenus);
-
-    ensureUploadStateLength((draft) => {
-      const nextStates = [...draft];
-      const [state] = nextStates.splice(index, 1);
-      nextStates.splice(targetIndex, 0, state);
-      return nextStates;
+    setDraft({
+      name: menu.name ?? "",
+      pdf: menu.pdf ?? "",
+      storagePath: menu.storagePath ?? "",
     });
+    setEditingIndex(index);
+    setUploadState({ status: "idle" });
+    setModalOpen(true);
   };
 
-  const clearFile = (index: number) => {
-    updateMenuAt(index, { pdf: "", storagePath: "" });
-    ensureUploadStateLength((draft) => {
-      draft[index] = { status: "idle" };
-      return draft;
-    });
+  const handleDraftChange = (field: keyof MenuEntry, value: string) => {
+    setDraft((prev) => ({ ...prev, [field]: value }));
   };
 
-  const uploadFile = async (index: number, file: File) => {
-    ensureUploadStateLength((draft) => {
-      draft[index] = { status: "uploading" };
-      return draft;
-    });
+  const clearDraftFile = () => {
+    setDraft((prev) => ({ ...prev, pdf: "", storagePath: "" }));
+    setUploadState({ status: "idle" });
+  };
+
+  const uploadFileForDraft = async (file: File) => {
+    setUploadState({ status: "uploading" });
 
     const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]+/g, "-");
     const timestamp = Date.now();
@@ -1786,185 +2288,168 @@ function MenusTab({ menus, onChange, firebase, locationId }: MenusTabProps) {
       await uploadBytes(fileRef, file);
       const url = await getDownloadURL(fileRef);
 
-      updateMenuAt(index, {
+      setDraft((prev) => ({
+        ...prev,
         pdf: url,
         storagePath,
-      });
+      }));
 
-      ensureUploadStateLength((draft) => {
-        draft[index] = { status: "success" };
-        return draft;
-      });
+      setUploadState({ status: "success" });
     } catch (error) {
       console.error("[MenusTab] upload failed", error);
-      ensureUploadStateLength((draft) => {
-        draft[index] = {
-          status: "error",
-          message: error instanceof Error ? error.message : String(error),
-        };
-        return draft;
+      setUploadState({
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
       });
     }
+  };
+
+  const handleSaveDraft = () => {
+    if (editingIndex === null) {
+      onChange([...menus, draft]);
+    } else {
+      updateMenuAt(editingIndex, draft);
+    }
+    setModalOpen(false);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={addMenu}
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-        >
+        <Button outline onClick={addMenu}>
           Add Menu
-        </button>
-        <p className="text-xs text-white/50">
+        </Button>
+        <Text className="text-xs text-white/60">
           Upload PDF menus for this location. Updates write directly to Cloud Storage.
-        </p>
+        </Text>
       </div>
 
-      <div className="space-y-4">
-        {menus.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-white/20 bg-black/30 px-4 py-8 text-center text-sm text-white/60">
+      {menus.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center">
+          <Text className="text-sm text-white/70">
             No menus configured yet. Add a menu to get started.
-          </p>
-        ) : null}
+          </Text>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+          <Table dense>
+            <TableHead className="bg-black/40 text-xs uppercase tracking-wide text-white/60">
+              <TableRow>
+                <TableHeader>Menu</TableHeader>
+                <TableHeader>PDF</TableHeader>
+                <TableHeader className="text-right">Actions</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {menus.map((menu, index) => (
+                <TableRow key={`menu-${index}`}>
+                  <TableCell className="text-white">
+                    {menu.name || `Menu ${index + 1}`}
+                  </TableCell>
+                  <TableCell className="text-white/70">
+                    {menu.pdf ? (
+                      <TextLink href={menu.pdf} target="_blank" rel="noopener noreferrer">
+                        View PDF
+                      </TextLink>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button outline onClick={() => openEdit(index)}>
+                        Edit
+                      </Button>
+                      <Button color="red" onClick={() => removeMenu(index)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
-        {menus.map((menu, index) => {
-          const uploadState = uploadStates[index] ?? { status: "idle" };
-          const fileInputId = `${locationId || "location"}-menu-${index}`;
-
-          return (
-            <div
-              key={index}
-              className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-5"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
-                  Menu {index + 1}
-                </h3>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => moveMenu(index, -1)}
-                    className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10 disabled:opacity-40"
-                    disabled={index === 0}
-                  >
-                    Move Up
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveMenu(index, 1)}
-                    className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10 disabled:opacity-40"
-                    disabled={index === menus.length - 1}
-                  >
-                    Move Down
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeMenu(index)}
-                    className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-
-              <FormGrid columns={2}>
-                <FormField label="Menu Name">
-                  <input
-                    type="text"
-                    value={menu.name ?? ""}
-                    onChange={(event) => handleNameChange(index, event.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
-                  />
-                </FormField>
-                <FormField label="PDF URL" hint="Auto-filled after upload, but you can paste a link manually.">
-                  <input
-                    type="text"
-                    value={menu.pdf ?? ""}
-                    onChange={(event) => updateMenuAt(index, { pdf: event.target.value })}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
-                  />
-                </FormField>
-              </FormGrid>
-
+      {modalOpen ? (
+        <Dialog open={modalOpen} onClose={() => setModalOpen(false)}>
+          <DialogTitle>{editingIndex === null ? "Add Menu" : "Edit Menu"}</DialogTitle>
+          <DialogDescription>
+            Update the menu details and upload a PDF.
+          </DialogDescription>
+          <DialogBody>
+            <div className="space-y-4">
+              <FormField label="Menu Name">
+                <Input
+                  type="text"
+                  value={draft.name ?? ""}
+                  onChange={(event) => handleDraftChange("name", event.target.value)}
+                />
+              </FormField>
+              <FormField label="PDF URL" hint="Auto-filled after upload, but you can paste a link manually.">
+                <Input
+                  type="text"
+                  value={draft.pdf ?? ""}
+                  onChange={(event) => handleDraftChange("pdf", event.target.value)}
+                />
+              </FormField>
               <div className="flex flex-wrap items-center gap-3">
-                <label
-                  htmlFor={fileInputId}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary-dark"
+                <Button
+                  color="red"
+                  onClick={() => {
+                    const element = document.getElementById("menu-upload-input") as HTMLInputElement | null;
+                    element?.click();
+                  }}
                 >
                   Upload PDF
-                </label>
+                </Button>
                 <input
-                  id={fileInputId}
+                  id="menu-upload-input"
                   type="file"
                   accept="application/pdf"
                   className="hidden"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (file) {
-                      void uploadFile(index, file);
+                      void uploadFileForDraft(file);
                     }
                     event.target.value = "";
                   }}
                 />
-
-                {menu.pdf ? (
-                  <a
-                    href={menu.pdf}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold uppercase tracking-wide text-primary transition hover:text-primary/80"
-                  >
+                {draft.pdf ? (
+                  <TextLink href={draft.pdf} target="_blank" rel="noopener noreferrer">
                     View PDF
-                  </a>
+                  </TextLink>
                 ) : null}
-
-                {menu.pdf ? (
-                  <button
-                    type="button"
-                    onClick={() => clearFile(index)}
-                    className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10"
-                  >
+                {draft.pdf ? (
+                  <Button outline onClick={clearDraftFile}>
                     Clear File
-                  </button>
+                  </Button>
                 ) : null}
               </div>
-
-              <UploadStatus status={uploadState.status} message={uploadState.message} />
+              {uploadState.status !== "idle" ? (
+                <Text className="text-xs text-white/60">
+                  {uploadState.status === "uploading"
+                    ? "Uploading…"
+                    : uploadState.status === "success"
+                      ? "Uploaded"
+                      : `Upload failed${uploadState.message ? `: ${uploadState.message}` : ""}`}
+                </Text>
+              ) : null}
             </div>
-          );
-        })}
-      </div>
+          </DialogBody>
+          <DialogActions>
+            <Button outline onClick={() => setModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={handleSaveDraft}>
+              Save Menu
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
     </div>
-  );
-}
-
-function UploadStatus({
-  status,
-  message,
-}: {
-  status: UploadState["status"];
-  message?: string;
-}) {
-  if (status === "idle") {
-    return null;
-  }
-
-  const baseClass = "text-xs uppercase tracking-wide";
-
-  if (status === "uploading") {
-    return <p className={`${baseClass} text-white/60`}>Uploading…</p>;
-  }
-
-  if (status === "success") {
-    return <p className={`${baseClass} text-emerald-300`}>Uploaded</p>;
-  }
-
-  return (
-    <p className={`${baseClass} text-rose-300`}>
-      Upload failed{message ? `: ${message}` : ""}
-    </p>
   );
 }
 
@@ -2089,105 +2574,96 @@ function CalendarTab({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={openCreate}
-          className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-          disabled={loading}
-        >
+        <Button outline onClick={openCreate} disabled={loading}>
           Add Event
-        </button>
-        <p className="text-xs text-white/50">
+        </Button>
+        <Text className="text-xs text-white/60">
           Manage this location&apos;s calendar. Click an event row to edit it, or add a new one.
-        </p>
+        </Text>
       </div>
 
       {loading ? (
-        <p className="text-sm text-white/60">Loading calendar events…</p>
+        <Text className="text-sm text-white/60">Loading calendar events…</Text>
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/15 px-4 py-3 text-sm text-rose-200">
-          {error.message}
+        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/15 px-4 py-3">
+          <Text className="text-sm text-rose-200">{error.message}</Text>
         </div>
       ) : null}
 
       {!loading && events.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-white/20 bg-black/30 px-4 py-8 text-center text-sm text-white/60">
-          No calendar events yet. Add an event to get started.
-        </p>
+        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center">
+          <Text className="text-sm text-white/70">
+            No calendar events yet. Add an event to get started.
+          </Text>
+        </div>
       ) : null}
 
       {events.length ? (
         <>
         <div className="hidden overflow-hidden rounded-2xl border border-white/10 bg-black/30 md:block">
-          <table className="min-w-full divide-y divide-white/10 text-sm">
-            <thead className="bg-black/40 text-xs uppercase tracking-wide text-white/60">
-              <tr>
-                <th className="px-4 py-3 text-left">Title</th>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Time</th>
-                <th className="px-4 py-3 text-left">Feed</th>
-                <th className="px-4 py-3 text-left">Location</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
+          <Table dense>
+            <TableHead className="bg-black/40 text-xs uppercase tracking-wide text-white/60">
+              <TableRow>
+                <TableHeader>Title</TableHeader>
+                <TableHeader>Date</TableHeader>
+                <TableHeader>Time</TableHeader>
+                <TableHeader>Feed</TableHeader>
+                <TableHeader>Location</TableHeader>
+                <TableHeader className="text-right">Actions</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {events.map((event, index) => (
-                <tr
+                <TableRow
                   key={event.id}
                   onClick={() => openEdit(index)}
                   className="cursor-pointer bg-black/20 transition hover:bg-white/5"
                 >
-                  <td className="px-4 py-3 text-white">
+                  <TableCell className="text-white">
                     {event.title || <span className="text-white/40">Untitled event</span>}
-                  </td>
-                  <td className="px-4 py-3 text-white/80">{event.date || "—"}</td>
-                  <td className="px-4 py-3 text-white/80">{event.time || "—"}</td>
-                  <td className="px-4 py-3 text-white/80">
+                  </TableCell>
+                  <TableCell className="text-white/80">{event.date || "—"}</TableCell>
+                  <TableCell className="text-white/80">{event.time || "—"}</TableCell>
+                  <TableCell>
                     {event.showOnFeed ? (
-                      <span className="rounded-full bg-primary/15 px-2 py-1 text-[0.65rem] font-semibold uppercase text-primary">
-                        Shown
-                      </span>
+                      <Badge color="emerald">Shown</Badge>
                     ) : (
-                      <span className="rounded-full bg-white/5 px-2 py-1 text-[0.65rem] uppercase text-white/50">
-                        Hidden
-                      </span>
+                      <Badge color="zinc">Hidden</Badge>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-white/80">
+                  </TableCell>
+                  <TableCell className="text-white/80">
                     {event.locationName || defaultLocationName || "—"}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
+                      <Button
+                        outline
                         onClick={(e) => {
                           e.stopPropagation();
                           moveEvent(index, -1);
                         }}
                         disabled={index === 0}
-                        className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Up
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        outline
                         onClick={(e) => {
                           e.stopPropagation();
                           moveEvent(index, 1);
                         }}
                         disabled={index === events.length - 1}
-                        className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Down
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
         <div className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4 md:hidden">
           {events.map((event, index) => (
@@ -2205,43 +2681,41 @@ function CalendarTab({
               className="rounded-2xl border border-white/10 bg-black/40 p-4 text-left transition hover:border-primary/40 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <div className="flex flex-col gap-1">
-                <span className="text-sm font-semibold text-white">
+                <Text className="text-sm font-semibold text-white">
                   {event.title || "Untitled event"}
-                </span>
-                <span className="text-xs text-white/60">
+                </Text>
+                <Text className="text-xs text-white/60">
                   {event.date || "—"} {event.time ? `• ${event.time}` : ""}
-                </span>
-                <span className="text-xs text-white/60">
+                </Text>
+                <Text className="text-xs text-white/60">
                   {(event.locationName || defaultLocationName || "—") ?? "—"}
-                </span>
+                </Text>
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[0.7rem] uppercase tracking-wide text-white/60">
+                <Text className="text-[0.7rem] uppercase tracking-wide text-white/60">
                   {event.showOnFeed ? "Shown on feed" : "Hidden from feed"}
-                </span>
+                </Text>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    outline
                     onClick={(e) => {
                       e.stopPropagation();
                       moveEvent(index, -1);
                     }}
                     disabled={index === 0}
-                    className="rounded-full border border-white/20 px-3 py-1 text-[0.65rem] uppercase tracking-wide text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Up
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    outline
                     onClick={(e) => {
                       e.stopPropagation();
                       moveEvent(index, 1);
                     }}
                     disabled={index === events.length - 1}
-                    className="rounded-full border border-white/20 px-3 py-1 text-[0.65rem] uppercase tracking-wide text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Down
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -2251,131 +2725,81 @@ function CalendarTab({
       ) : null}
 
       {modalOpen && draft ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-2xl space-y-6 rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-2xl shadow-black/60">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold uppercase tracking-wide text-white">
-                  {modalMode === "create" ? "Create Event" : "Edit Event"}
-                </h3>
-                <p className="text-xs text-white/60">
-                  Update the event details and save your changes.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10"
-              >
-                Close
-              </button>
-            </div>
-
+        <Dialog open={modalOpen} onClose={closeModal}>
+          <DialogTitle>
+            {modalMode === "create" ? "Create Event" : "Edit Event"}
+          </DialogTitle>
+          <DialogDescription>
+            Update the event details and save your changes.
+          </DialogDescription>
+          <DialogBody>
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                  Title
-                </label>
-                <input
+              <FormField label="Title">
+                <Input
                   type="text"
                   value={draft.title}
                   onChange={(e) => handleDraftChange("title", e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                   placeholder="Event title"
                 />
-              </div>
+              </FormField>
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                  Date
-                </label>
-                <input
+              <FormField label="Date">
+                <Input
                   type="date"
                   value={draft.date}
                   onChange={(e) => handleDraftChange("date", e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                 />
-              </div>
+              </FormField>
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                  Time
-                </label>
-                <input
+              <FormField label="Time">
+                <Input
                   type="time"
                   value={draft.time}
                   onChange={(e) => handleDraftChange("time", e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                 />
-              </div>
+              </FormField>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                  Location Name
-                </label>
-                <input
+              <FormField label="Location Name">
+                <Input
                   type="text"
                   value={draft.locationName}
                   onChange={(e) => handleDraftChange("locationName", e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
                   placeholder="Displayed location name"
                 />
-              </div>
+              </FormField>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-semibold uppercase tracking-wide text-white/60">
-                  Description
-                </label>
-                <textarea
+              <FormField label="Description">
+                <Textarea
                   value={draft.description}
                   onChange={(e) => handleDraftChange("description", e.target.value)}
-                  className="h-28 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                  rows={5}
                   placeholder="Optional details"
                 />
-              </div>
+              </FormField>
             </div>
 
-            <label className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70">
-              <input
-                type="checkbox"
+            <CheckboxField className="mt-4">
+              <Checkbox
                 checked={draft.showOnFeed}
-                onChange={(e) => handleDraftChange("showOnFeed", e.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-black/60 text-primary focus:ring-primary"
+                onChange={(value) => handleDraftChange("showOnFeed", value)}
               />
-              Show on website feed
-            </label>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              {modalMode === "edit" ? (
-                <button
-                  type="button"
-                  onClick={handleDeleteDraft}
-                  className="rounded-full border border-rose-400/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
-                >
-                  Delete Event
-                </button>
-              ) : (
-                <div className="flex-1" />
-              )}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveDraft}
-                  className="rounded-full bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-primary-dark"
-                >
-                  Save Event
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+              <Label>Show on website feed</Label>
+            </CheckboxField>
+          </DialogBody>
+          <DialogActions>
+            {modalMode === "edit" ? (
+              <Button color="red" onClick={handleDeleteDraft}>
+                Delete Event
+              </Button>
+            ) : null}
+            <Button outline onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={handleSaveDraft}>
+              Save Event
+            </Button>
+          </DialogActions>
+        </Dialog>
       ) : null}
     </div>
   );
@@ -2414,6 +2838,9 @@ function RatesEditor({
   onChange: (value: Record<string, any> | null) => void;
 }) {
   const rates = value ?? { range: "", bays: [] };
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [draft, setDraft] = useState({ name: "", price: "" });
 
   const updateRange = (next: string) => {
     onChange({ ...rates, range: next });
@@ -2426,9 +2853,39 @@ function RatesEditor({
   };
 
   const addBay = () => {
+    setDraft({ name: "", price: "" });
+    setEditingIndex(null);
+    setModalOpen(true);
+  };
+
+  const editBay = (index: number) => {
+    const bays = Array.isArray(rates.bays) ? rates.bays : [];
+    const current = bays[index];
+    if (!current) {
+      return;
+    }
+    setDraft({
+      name: typeof current.name === "string" ? current.name : "",
+      price: typeof current.price === "string" ? current.price : "",
+    });
+    setEditingIndex(index);
+    setModalOpen(true);
+  };
+
+  const handleSaveDraft = () => {
     const bays = Array.isArray(rates.bays) ? [...rates.bays] : [];
-    bays.push({ name: "", price: "" });
+    if (editingIndex === null) {
+      bays.push({ ...draft });
+    } else {
+      bays[editingIndex] = { ...bays[editingIndex], ...draft };
+    }
     onChange({ ...rates, bays });
+    setModalOpen(false);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingIndex(null);
   };
 
   const removeBay = (index: number) => {
@@ -2442,67 +2899,100 @@ function RatesEditor({
     <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
+          <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
             {title}
-          </h3>
-          <p className="text-xs text-white/50">
+          </Subheading>
+          <Text className="text-xs text-white/60">
             Update the hourly rate ranges and bay pricing.
-          </p>
+          </Text>
         </div>
-        <button
-          type="button"
-          onClick={addBay}
-          className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10"
-        >
+        <Button outline onClick={addBay}>
           Add Bay
-        </button>
+        </Button>
       </div>
 
       <FormField label="Rate Range" hint="Displayed above the rate cards (e.g., Mon-Fri 9am-3pm).">
-        <input
+        <Input
           type="text"
           value={rates.range ?? ""}
           onChange={(event) => updateRange(event.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
         />
       </FormField>
 
-      <div className="space-y-3">
-        {(Array.isArray(rates.bays) ? rates.bays : []).map((bay: Record<string, string>, index: number) => (
-          <div
-            key={`${title}-bay-${index}`}
-            className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_auto]"
-          >
-            <div className="space-y-3">
+      {(Array.isArray(rates.bays) ? rates.bays : []).length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center">
+          <Text className="text-sm text-white/70">
+            No bays configured yet. Add a bay to get started.
+          </Text>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+          <Table dense>
+            <TableHead className="bg-black/40 text-xs uppercase tracking-wide text-white/60">
+              <TableRow>
+                <TableHeader>Bay</TableHeader>
+                <TableHeader>Price</TableHeader>
+                <TableHeader className="text-right">Actions</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(Array.isArray(rates.bays) ? rates.bays : []).map((bay: Record<string, string>, index: number) => (
+                <TableRow key={`${title}-bay-${index}`}>
+                  <TableCell className="text-white">{bay?.name ?? "—"}</TableCell>
+                  <TableCell className="text-white/70">{bay?.price ?? "—"}</TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button outline onClick={() => editBay(index)}>
+                        Edit
+                      </Button>
+                      <Button color="red" onClick={() => removeBay(index)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {modalOpen ? (
+        <Dialog open={modalOpen} onClose={closeModal}>
+          <DialogTitle>
+            {editingIndex === null ? `Add ${title} Bay` : `Edit ${title} Bay`}
+          </DialogTitle>
+          <DialogDescription>
+            Set the bay label and hourly rate.
+          </DialogDescription>
+          <DialogBody>
+            <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Bay Name">
-                <input
+                <Input
                   type="text"
-                  value={bay?.name ?? ""}
-                  onChange={(event) => updateBay(index, { name: event.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                  value={draft.name}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
                 />
               </FormField>
               <FormField label="Price">
-                <input
+                <Input
                   type="text"
-                  value={bay?.price ?? ""}
-                  onChange={(event) => updateBay(index, { price: event.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                  value={draft.price}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, price: event.target.value }))}
                 />
               </FormField>
             </div>
-            <div className="flex items-start justify-end">
-              <button
-                type="button"
-                onClick={() => removeBay(index)}
-                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          </DialogBody>
+          <DialogActions>
+            <Button outline onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={handleSaveDraft}>
+              {editingIndex === null ? "Add Bay" : "Save Bay"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
     </div>
   );
 }
@@ -2530,18 +3020,16 @@ function PromotionsTab({ promotions, onChange }: PromotionsTabProps) {
 
   return (
     <div className="space-y-4">
-      <button
-        type="button"
-        onClick={addPromotion}
-        className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-      >
+      <Button outline onClick={addPromotion}>
         Add Promotion
-      </button>
+      </Button>
 
       {promotions.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-white/20 bg-black/30 px-4 py-8 text-center text-sm text-white/60">
-          No promotions yet. Use the button above to add one.
-        </p>
+        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center">
+          <Text className="text-sm text-white/70">
+            No promotions yet. Use the button above to add one.
+          </Text>
+        </div>
       ) : null}
 
       <div className="space-y-4">
@@ -2551,30 +3039,25 @@ function PromotionsTab({ promotions, onChange }: PromotionsTabProps) {
             className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-5"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
+              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
                 Promotion {index + 1}
-              </h3>
-              <button
-                type="button"
-                onClick={() => removePromotion(index)}
-                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
-              >
+              </Subheading>
+              <Button color="red" onClick={() => removePromotion(index)}>
                 Remove
-              </button>
+              </Button>
             </div>
             <FormField label="Title">
-              <input
+              <Input
                 type="text"
                 value={promotion.title ?? ""}
                 onChange={(event) => updatePromotion(index, { title: event.target.value })}
-                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
               />
             </FormField>
             <FormField label="Body" hint="Supports plain text.">
-              <textarea
+              <Textarea
                 value={promotion.body ?? ""}
                 onChange={(event) => updatePromotion(index, { body: event.target.value })}
-                className="min-h-[100px] w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                rows={5}
               />
             </FormField>
           </div>
@@ -2603,11 +3086,10 @@ function OrderingLinksTab({ form, onChange }: OrderingLinksTabProps) {
     <div className="space-y-4">
       {ORDERING_FIELDS.map(({ field, label, hint }) => (
         <FormField key={field} label={label} hint={hint}>
-          <input
+          <Input
             type="text"
             value={form[field] ?? ""}
             onChange={(event) => onChange(field, event.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
       ))}
@@ -2636,35 +3118,26 @@ function CareerEmailsTab({ emails, onChange }: CareerEmailsTabProps) {
 
   return (
     <div className="space-y-4">
-      <button
-        type="button"
-        onClick={addEmail}
-        className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-      >
+      <Button outline onClick={addEmail}>
         Add Email
-      </button>
+      </Button>
 
       <div className="space-y-3">
         {emails.length === 0 ? (
-          <p className="text-sm text-white/50">No emails yet. Add at least one contact.</p>
+          <Text className="text-sm text-white/60">No emails yet. Add at least one contact.</Text>
         ) : null}
 
         {emails.map((email, index) => (
           <div key={`career-email-${index}`} className="flex gap-3">
-            <input
+            <Input
               type="email"
               value={email}
               onChange={(event) => updateEmail(index, event.target.value)}
-              className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
               placeholder="careers@getinthebunker.golf"
             />
-            <button
-              type="button"
-              onClick={() => removeEmail(index)}
-              className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
-            >
+            <Button color="red" onClick={() => removeEmail(index)}>
               Remove
-            </button>
+            </Button>
           </div>
         ))}
       </div>
@@ -2704,13 +3177,9 @@ function ImagesTab({ images, onChange }: ImagesTabProps) {
 
   return (
     <div className="space-y-4">
-      <button
-        type="button"
-        onClick={addImage}
-        className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-      >
+      <Button outline onClick={addImage}>
         Add Image URL
-      </button>
+      </Button>
 
       <div className="space-y-3">
         {images.map((image, index) => (
@@ -2718,37 +3187,22 @@ function ImagesTab({ images, onChange }: ImagesTabProps) {
             key={`image-${index}`}
             className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/30 p-4 md:flex-row md:items-center"
           >
-            <input
+            <Input
               type="text"
               value={image}
               onChange={(event) => updateImage(index, event.target.value)}
-              className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
               placeholder="https://..."
             />
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => moveImage(index, -1)}
-                disabled={index === 0}
-                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10 disabled:opacity-40"
-              >
+              <Button outline onClick={() => moveImage(index, -1)} disabled={index === 0}>
                 Up
-              </button>
-              <button
-                type="button"
-                onClick={() => moveImage(index, 1)}
-                disabled={index === images.length - 1}
-                className="rounded-full border border-white/20 px-3 py-1 text-xs uppercase tracking-wide text-white transition hover:bg-white/10 disabled:opacity-40"
-              >
+              </Button>
+              <Button outline onClick={() => moveImage(index, 1)} disabled={index === images.length - 1}>
                 Down
-              </button>
-              <button
-                type="button"
-                onClick={() => removeImage(index)}
-                className="rounded-full border border-rose-500/40 px-3 py-1 text-xs uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
-              >
+              </Button>
+              <Button color="red" onClick={() => removeImage(index)}>
                 Remove
-              </button>
+              </Button>
             </div>
           </div>
         ))}
@@ -2771,19 +3225,17 @@ function MapTab({ coordinates, onChange, locationName }: MapTabProps) {
     <div className="space-y-6">
       <FormGrid columns={2}>
         <FormField label="Latitude">
-          <input
+          <Input
             type="text"
             value={lat}
             onChange={(event) => onChange({ ...coordinates, lat: event.target.value })}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
         <FormField label="Longitude">
-          <input
+          <Input
             type="text"
             value={lng}
             onChange={(event) => onChange({ ...coordinates, lng: event.target.value })}
-            className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
           />
         </FormField>
       </FormGrid>
@@ -2810,10 +3262,10 @@ function AboutTab({ about, onChange }: AboutTabProps) {
       label="About Copy"
       hint="Displayed on the location page. Support plain text and simple formatting."
     >
-      <textarea
+      <Textarea
         value={about}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-[160px] w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+        rows={7}
       />
     </FormField>
   );

@@ -10,6 +10,11 @@ import {
   type QuerySnapshot,
   type Timestamp,
 } from "firebase/firestore";
+import {
+  DEFAULT_WORKFLOW_STATUS,
+  parseWorkflowFromData,
+  type InquiryWorkflowStatus,
+} from "@/utils/inquiryWorkflow";
 
 export type LeaguesInquiry = {
   inquiryId: string;
@@ -25,12 +30,18 @@ export type LeaguesInquiry = {
   message?: string | null;
   emailTo: string[];
   createdAtDate?: Date | null;
+  workflowStatus: InquiryWorkflowStatus;
+  workflowAssignedTo: string;
 };
 
 export type UseLeaguesInquiriesValue = {
   inquiries: LeaguesInquiry[];
   loading: boolean;
   error: Error | null;
+};
+
+type UseLeaguesInquiriesOptions = {
+  refreshToken?: number;
 };
 
 function timestampToDate(value: unknown) {
@@ -55,10 +66,14 @@ function normalizeEmails(value: unknown): string[] {
   return Array.from(uniq);
 }
 
-export function useLeaguesInquiries(firebase: Firebase | null): UseLeaguesInquiriesValue {
+export function useLeaguesInquiries(
+  firebase: Firebase | null,
+  options: UseLeaguesInquiriesOptions = {},
+): UseLeaguesInquiriesValue {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [records, setRecords] = useState<LeaguesInquiry[]>([]);
+  const refreshToken = options.refreshToken ?? 0;
 
   useEffect(() => {
     if (!firebase) {
@@ -79,6 +94,7 @@ export function useLeaguesInquiries(firebase: Firebase | null): UseLeaguesInquir
           const createdAtDate =
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
+          const workflow = parseWorkflowFromData(data);
 
           return {
             inquiryId: doc.id,
@@ -100,6 +116,8 @@ export function useLeaguesInquiries(firebase: Firebase | null): UseLeaguesInquir
             message: typeof data.message === "string" ? data.message : null,
             emailTo: normalizeEmails(data.emailTo),
             createdAtDate,
+            workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
+            workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies LeaguesInquiry;
         });
 
@@ -115,11 +133,10 @@ export function useLeaguesInquiries(firebase: Firebase | null): UseLeaguesInquir
     );
 
     return () => off();
-  }, [firebase]);
+  }, [firebase, refreshToken]);
 
   return useMemo(
     () => ({ inquiries: records, loading, error }),
     [records, loading, error],
   );
 }
-

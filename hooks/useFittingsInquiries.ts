@@ -10,6 +10,11 @@ import {
   type QuerySnapshot,
   type Timestamp,
 } from "firebase/firestore";
+import {
+  DEFAULT_WORKFLOW_STATUS,
+  parseWorkflowFromData,
+  type InquiryWorkflowStatus,
+} from "@/utils/inquiryWorkflow";
 
 export type FittingsInquiry = {
   inquiryId: string;
@@ -22,12 +27,18 @@ export type FittingsInquiry = {
   notes?: string | null;
   emailTo: string[];
   createdAtDate?: Date | null;
+  workflowStatus: InquiryWorkflowStatus;
+  workflowAssignedTo: string;
 };
 
 export type UseFittingsInquiriesValue = {
   inquiries: FittingsInquiry[];
   loading: boolean;
   error: Error | null;
+};
+
+type UseFittingsInquiriesOptions = {
+  refreshToken?: number;
 };
 
 function timestampToDate(value: unknown) {
@@ -52,10 +63,14 @@ function normalizeEmails(value: unknown): string[] {
   return Array.from(uniq);
 }
 
-export function useFittingsInquiries(firebase: Firebase | null): UseFittingsInquiriesValue {
+export function useFittingsInquiries(
+  firebase: Firebase | null,
+  options: UseFittingsInquiriesOptions = {},
+): UseFittingsInquiriesValue {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [records, setRecords] = useState<FittingsInquiry[]>([]);
+  const refreshToken = options.refreshToken ?? 0;
 
   useEffect(() => {
     if (!firebase) return;
@@ -74,6 +89,7 @@ export function useFittingsInquiries(firebase: Firebase | null): UseFittingsInqu
           const createdAtDate =
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
+          const workflow = parseWorkflowFromData(data);
 
           return {
             inquiryId: doc.id,
@@ -86,6 +102,8 @@ export function useFittingsInquiries(firebase: Firebase | null): UseFittingsInqu
             notes: typeof data.notes === "string" ? data.notes : null,
             emailTo: normalizeEmails(data.emailTo),
             createdAtDate,
+            workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
+            workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies FittingsInquiry;
         });
 
@@ -101,11 +119,10 @@ export function useFittingsInquiries(firebase: Firebase | null): UseFittingsInqu
     );
 
     return () => off();
-  }, [firebase]);
+  }, [firebase, refreshToken]);
 
   return useMemo(
     () => ({ inquiries: records, loading, error }),
     [records, loading, error],
   );
 }
-

@@ -9,13 +9,13 @@ import {
 import ReactCanvasConfetti from "react-canvas-confetti";
 import type { CreateTypes as ConfettiInstance } from "canvas-confetti";
 import { GrClose } from "react-icons/gr";
-import clsx from "clsx";
 import { Button } from "@/components/ui/Button";
 
 type InfoModalData = {
   alertMsg?: string;
   title?: string;
   msg?: string;
+  message?: string;
   link?: string;
   linkText?: string;
   link2?: string;
@@ -39,9 +39,6 @@ const canvasStyles: React.CSSProperties = {
   zIndex: 1000,
 };
 
-const randomInRange = (min: number, max: number) =>
-  Math.random() * (max - min) + min;
-
 const getAnimationSettings = (angle: number, originX: number) => ({
   particleCount: 3,
   angle,
@@ -54,10 +51,11 @@ export function InfoModal({
   show,
   hide,
   data,
-  showConfetti = true,
+  showConfetti = false,
 }: InfoModalProps) {
   const refAnimationInstance = useRef<ConfettiInstance | null>(null);
   const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
+  const bodyMessage = data?.msg ?? data?.message;
 
   const getInstance = useCallback((instance: ConfettiInstance) => {
     refAnimationInstance.current = instance;
@@ -97,7 +95,7 @@ export function InfoModal({
   }, [intervalId]);
 
   useEffect(() => {
-    if (show) {
+    if (show && showConfetti) {
       startAnimation();
     } else {
       stopAnimation();
@@ -106,7 +104,7 @@ export function InfoModal({
     return () => {
       stopAnimation();
     };
-  }, [show, startAnimation, stopAnimation]);
+  }, [show, showConfetti, startAnimation, stopAnimation]);
 
   if (!show) {
     return null;
@@ -140,8 +138,8 @@ export function InfoModal({
               {data.title}
             </h2>
           ) : null}
-          {data?.msg ? (
-            <p className="text-lg text-white/90">{data.msg}</p>
+          {bodyMessage ? (
+            <p className="text-lg text-white/90">{bodyMessage}</p>
           ) : null}
 
           <div className="flex flex-col gap-3 pt-2">

@@ -10,6 +10,7 @@ export const LOCATION_ADMIN = "/admin/locations";
 export const FRANCHISE_INQUIRIES_ADMIN = "/admin/franchise-inquiries";
 export const CAREER_INQUIRIES_ADMIN = "/admin/career-inquiries";
 export const LESSON_INQUIRIES_ADMIN = "/admin/lesson-inquiries";
+export const EVENT_INQUIRIES_ADMIN = "/admin/event-inquiries";
 export const INQUIRY_SETTINGS_ADMIN = "/admin/inquiry-settings";
 export const LOCATION = "/location";
 export const ABOUT_US = "/about";

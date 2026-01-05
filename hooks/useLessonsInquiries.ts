@@ -10,6 +10,11 @@ import {
   type QuerySnapshot,
   type Timestamp,
 } from "firebase/firestore";
+import {
+  DEFAULT_WORKFLOW_STATUS,
+  parseWorkflowFromData,
+  type InquiryWorkflowStatus,
+} from "@/utils/inquiryWorkflow";
 
 export type LessonsInquiry = {
   inquiryId: string;
@@ -21,12 +26,18 @@ export type LessonsInquiry = {
   notes?: string | null;
   emailTo: string[];
   createdAtDate?: Date | null;
+  workflowStatus: InquiryWorkflowStatus;
+  workflowAssignedTo: string;
 };
 
 export type UseLessonsInquiriesValue = {
   inquiries: LessonsInquiry[];
   loading: boolean;
   error: Error | null;
+};
+
+type UseLessonsInquiriesOptions = {
+  refreshToken?: number;
 };
 
 function timestampToDate(value: unknown) {
@@ -51,10 +62,14 @@ function normalizeEmails(value: unknown): string[] {
   return Array.from(uniq);
 }
 
-export function useLessonsInquiries(firebase: Firebase | null): UseLessonsInquiriesValue {
+export function useLessonsInquiries(
+  firebase: Firebase | null,
+  options: UseLessonsInquiriesOptions = {},
+): UseLessonsInquiriesValue {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [records, setRecords] = useState<LessonsInquiry[]>([]);
+  const refreshToken = options.refreshToken ?? 0;
 
   useEffect(() => {
     if (!firebase) {
@@ -75,6 +90,7 @@ export function useLessonsInquiries(firebase: Firebase | null): UseLessonsInquir
           const createdAtDate =
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
+          const workflow = parseWorkflowFromData(data);
 
           return {
             inquiryId: doc.id,
@@ -86,6 +102,8 @@ export function useLessonsInquiries(firebase: Firebase | null): UseLessonsInquir
             notes: typeof data.notes === "string" ? data.notes : null,
             emailTo: normalizeEmails(data.emailTo),
             createdAtDate,
+            workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
+            workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies LessonsInquiry;
         });
 
@@ -101,11 +119,10 @@ export function useLessonsInquiries(firebase: Firebase | null): UseLessonsInquir
     );
 
     return () => off();
-  }, [firebase]);
+  }, [firebase, refreshToken]);
 
   return useMemo(
     () => ({ inquiries: records, loading, error }),
     [records, loading, error],
   );
 }
-

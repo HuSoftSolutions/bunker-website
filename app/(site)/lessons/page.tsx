@@ -133,6 +133,7 @@ export default function LessonsPage() {
     () => settings.lessonsDefaultRecipients,
     [settings.lessonsDefaultRecipients],
   );
+  const sendEmails = settings.lessonsSendEmails;
 
   const formIsInvalid = !name.trim() || !email.trim();
 
@@ -154,28 +155,30 @@ export default function LessonsPage() {
         location: location.trim() || null,
         timeOfDay: timeOfDay.trim() || null,
         notes: notes.trim() || null,
-        emailTo: recipients,
+        emailTo: sendEmails ? recipients : [],
         createdAt: serverTimestamp(),
       });
 
-      const response = await fetch("/api/inquiries/lessons", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inquiryId: docRef.id,
-          name: name.trim(),
-          phone: phone.trim() || null,
-          email: email.trim(),
-          location: location.trim() || null,
-          timeOfDay: timeOfDay.trim() || null,
-          notes: notes.trim() || null,
-          emailTo: recipients,
-        }),
-      });
+      if (sendEmails) {
+        const response = await fetch("/api/inquiries/lessons", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inquiryId: docRef.id,
+            name: name.trim(),
+            phone: phone.trim() || null,
+            email: email.trim(),
+            location: location.trim() || null,
+            timeOfDay: timeOfDay.trim() || null,
+            notes: notes.trim() || null,
+            emailTo: recipients,
+          }),
+        });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body?.error || "Failed to send inquiry.");
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body?.error || "Failed to send inquiry.");
+        }
       }
 
       setSubmitted(true);

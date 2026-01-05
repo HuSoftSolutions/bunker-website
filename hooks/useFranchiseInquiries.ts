@@ -9,6 +9,11 @@ import {
   type DocumentData,
   type QuerySnapshot,
 } from "firebase/firestore";
+import {
+  DEFAULT_WORKFLOW_STATUS,
+  type InquiryWorkflowStatus,
+  parseWorkflowFromData,
+} from "@/utils/inquiryWorkflow";
 
 export type FranchiseInquiry = {
   inquiryId: string;
@@ -25,6 +30,8 @@ export type FranchiseInquiry = {
   submittedAtDate?: Date | null;
   createdAtDate?: Date | null;
   franchiseSite?: string | null;
+  workflowStatus: InquiryWorkflowStatus;
+  workflowAssignedTo: string;
 };
 
 type UseFranchiseInquiriesOptions = {
@@ -78,6 +85,8 @@ export function useFranchiseInquiries(
                 ? createTime.toDate()
                 : null;
 
+            const workflow = parseWorkflowFromData(data);
+
             return {
               inquiryId: (data?.inquiryId as string) ?? doc.id,
               firstName: (data?.firstName as string) ?? "",
@@ -103,6 +112,8 @@ export function useFranchiseInquiries(
                 typeof data?.franchiseSite === "string"
                   ? data.franchiseSite
                   : null,
+              workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
+              workflowAssignedTo: workflow.assignedTo ?? "",
             } satisfies FranchiseInquiry;
           });
 

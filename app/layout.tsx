@@ -1,8 +1,10 @@
 import localFont from "next/font/local";
 import "./globals.css";
+import "react-toastify/dist/ReactToastify.css";
 import type { Metadata } from "next";
 import { FirebaseProvider } from "@/providers/FirebaseProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { ToastContainer } from "react-toastify";
 
 const aller = localFont({
   src: [
@@ -39,7 +41,20 @@ export default function RootLayout({
         className={`${aller.variable} ${allerDisplay.variable} antialiased`}
       >
         <FirebaseProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <ToastContainer
+              position="top-right"
+              autoClose={3500}
+              hideProgressBar={false}
+              newestOnTop={false}
+              closeOnClick
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="dark"
+            />
+          </AuthProvider>
         </FirebaseProvider>
       </body>
     </html>

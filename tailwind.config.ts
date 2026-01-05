@@ -8,6 +8,7 @@ const config: Config = {
     "./providers/**/*.{js,ts,jsx,tsx}",
     "./utils/**/*.{js,ts,jsx,tsx}",
     "./data/**/*.{js,ts,jsx,tsx}",
+    "./ui-kit/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -22,6 +23,9 @@ const config: Config = {
         dark: "#262626",
         light: "#dcdcdc",
         bunkerBlack: "#000000",
+      },
+      boxShadow: {
+        xs: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
       },
       fontFamily: {
         sans: ["var(--font-aller)", "system-ui", "sans-serif"],

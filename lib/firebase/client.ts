@@ -201,6 +201,12 @@ class Firebase {
   leaguesInquiriesRef = () =>
     collection(this.db, "inquiries/leagues/submissions");
 
+  membershipInquiriesRef = () =>
+    collection(this.db, "inquiries/memberships/submissions");
+
+  eventsInquiriesRef = () =>
+    collection(this.db, "inquiries/events/submissions");
+
   adPageConfigRef = () => doc(this.db, "configs/ad_page");
 
   businessSettingsRef = () => doc(this.db, "configs/business");
@@ -208,6 +214,8 @@ class Firebase {
   inquirySettingsRef = () => doc(this.db, "configs/inquiries");
 
   juniorGolfConfigRef = () => doc(this.db, "configs/junior_golf");
+
+  noticeInfoRef = () => doc(this.db, "noticeInfo/config");
 
   fittingsConfigRef = () => doc(this.db, "configs/fittings");
 
