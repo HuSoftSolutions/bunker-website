@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useFirebase } from "@/providers/FirebaseProvider";
+import { useAuth } from "@/providers/AuthProvider";
 
 export default function SignInPage() {
   const firebase = useFirebase();
+  const { authUser, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -16,6 +18,12 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
 
   const redirectTo = searchParams.get("redirect") || "/admin/locations";
+
+  useEffect(() => {
+    if (!authLoading && authUser) {
+      router.replace(redirectTo);
+    }
+  }, [authLoading, authUser, redirectTo, router]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
