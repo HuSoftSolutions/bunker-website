@@ -155,11 +155,7 @@ function MenuSection({ title, subtitle, children }: MenuSectionProps) {
   );
 }
 
-type MenuPageProps = {
-  params?: never;
-};
-
-export default function BeerMenuPage(_: MenuPageProps) {
+export default function BeerMenuPage() {
   const firebase = useFirebase();
   const params = useParams<{ id?: string | string[] }>();
   const locationId = useMemo(() => {

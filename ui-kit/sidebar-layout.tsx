@@ -1,6 +1,6 @@
 'use client'
 
-import { Dialog } from "@headlessui/react"
+import { Dialog, DialogBackdrop, DialogPanel } from "@headlessui/react"
 import React, { useState } from "react"
 import { NavbarItem } from './navbar'
 
@@ -31,8 +31,8 @@ function MobileSidebar({
 }) {
   return (
     <Dialog open={open} onClose={close} className="lg:hidden">
-      <Dialog.Overlay className="fixed inset-0 bg-black/30" />
-      <Dialog.Panel className="fixed inset-y-0 w-full max-w-80 p-2 data-[closed]:-translate-x-full transition duration-200 ease-out">
+      <DialogBackdrop className="fixed inset-0 bg-black/30" />
+      <DialogPanel className="fixed inset-y-0 w-full max-w-80 p-2 data-[closed]:-translate-x-full transition duration-200 ease-out">
         <div className="flex h-full flex-col rounded-lg bg-white shadow-xs ring-1 ring-zinc-950/5 dark:bg-zinc-900 dark:ring-white/10">
           <div className="-mb-3 px-4 pt-3">
             <NavbarItem onClick={close} aria-label="Close navigation" type="button">
@@ -43,7 +43,7 @@ function MobileSidebar({
             ? (children as (close: () => void) => React.ReactNode)(close)
             : children}
         </div>
-      </Dialog.Panel>
+      </DialogPanel>
     </Dialog>
   )
 }
@@ -56,7 +56,7 @@ export function SidebarLayout({
   navbar: React.ReactNode;
   sidebar: React.ReactNode | ((options: { closeSidebar: () => void }) => React.ReactNode);
 }>) {
-  let [showSidebar, setShowSidebar] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(false)
   const renderSidebar = (closeSidebar: () => void) =>
     typeof sidebar === "function" ? sidebar({ closeSidebar }) : sidebar
 

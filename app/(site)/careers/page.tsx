@@ -7,12 +7,31 @@ import { useFirebase } from "@/providers/FirebaseProvider";
 import { ExternalLinkButton } from "@/components/buttons/ExternalLinkButton";
 import { CareerApplicationForm } from "@/components/careers/CareerApplicationForm";
 
+const resolveStringValue = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim() ? value : fallback;
+
+const resolveStringArrayValue = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value.filter(
+      (item): item is string => typeof item === "string" && Boolean(item.trim()),
+    );
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return [value];
+  }
+
+  return [];
+};
+
 export default function CareersPage() {
   const firebase = useFirebase();
   const { locations } = useLocations(firebase);
 
   const hiringLocations = useMemo(() => {
-    return locations.filter((location) => location?.careerEmails?.length);
+    return locations.filter(
+      (location) => resolveStringArrayValue(location?.careerEmails).length > 0,
+    );
   }, [locations]);
 
   return (
@@ -42,24 +61,26 @@ export default function CareersPage() {
 
           {hiringLocations.length ? (
             <div className="space-y-4">
-              {hiringLocations.map((location) => {
-                const emails = Array.isArray(location.careerEmails)
-                  ? location.careerEmails
-                  : typeof location.careerEmails === "string"
-                  ? [location.careerEmails]
-                  : [];
+              {hiringLocations.map((location, index) => {
+                const emails = resolveStringArrayValue(location.careerEmails);
+                const locationId = resolveStringValue(location.id);
+                const locationName = resolveStringValue(
+                  location.name,
+                  "Location",
+                );
+                const locationAddress = resolveStringValue(location.address);
 
                 return (
                   <article
-                    key={location.id ?? location.name}
+                    key={locationId || locationName || `location-${index}`}
                     className="rounded-3xl border border-white/10 bg-black/40 px-6 py-6 shadow-lg shadow-black/30"
                   >
                     <h3 className="text-xl font-semibold uppercase tracking-wide text-primary">
-                      {location.name}
+                      {locationName}
                     </h3>
-                    {location.address ? (
+                    {locationAddress ? (
                       <p className="text-sm text-white/60">
-                        {location.address}
+                        {locationAddress}
                       </p>
                     ) : null}
 

@@ -1,7 +1,7 @@
 declare global {
   interface Window {
-    google?: any;
-    __googleMapsApiPromise?: Promise<any>;
+    google?: unknown;
+    __googleMapsApiPromise?: Promise<unknown>;
   }
 }
 
@@ -10,22 +10,32 @@ export const loadGoogleMapsApi = (apiKey: string) => {
     return Promise.reject(new Error("Google Maps can only load in the browser."));
   }
 
-  if (window.google?.maps) {
-    return Promise.resolve(window.google.maps);
+  const resolveMaps = () => {
+    if (!window.google || typeof window.google !== "object") {
+      return null;
+    }
+    const maps = (window.google as { maps?: unknown }).maps;
+    return maps ?? null;
+  };
+
+  const existingMaps = resolveMaps();
+  if (existingMaps) {
+    return Promise.resolve(existingMaps);
   }
 
   if (window.__googleMapsApiPromise) {
     return window.__googleMapsApiPromise;
   }
 
-  window.__googleMapsApiPromise = new Promise<any>((resolve, reject) => {
+  window.__googleMapsApiPromise = new Promise<unknown>((resolve, reject) => {
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      if (window.google?.maps) {
-        resolve(window.google.maps);
+      const maps = resolveMaps();
+      if (maps) {
+        resolve(maps);
       } else {
         reject(new Error("Google Maps failed to load."));
       }
@@ -38,4 +48,3 @@ export const loadGoogleMapsApi = (apiKey: string) => {
 
   return window.__googleMapsApiPromise;
 };
-

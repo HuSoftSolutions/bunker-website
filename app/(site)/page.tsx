@@ -101,8 +101,10 @@ export default function LandingPage() {
         const allEvents: CalendarFeedEvent[] = [];
         snapshot.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
           const data = doc.data() as Record<string, unknown>;
-          const calendarEvents = Array.isArray((data as any).calendarEvents)
-            ? ((data as any).calendarEvents as CalendarFeedEvent[])
+          const calendarEventsRaw = (data as { calendarEvents?: unknown })
+            .calendarEvents;
+          const calendarEvents = Array.isArray(calendarEventsRaw)
+            ? (calendarEventsRaw as CalendarFeedEvent[])
             : [];
           const filtered = calendarEvents.filter(
             (event: CalendarFeedEvent) => event.showOnFeed,
@@ -189,6 +191,7 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-black/60 p-4 shadow-xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={UPCOMING_IMAGE}
               alt="Trackman Bay"
@@ -203,6 +206,7 @@ export default function LandingPage() {
               key={feature.title}
               className="group relative overflow-hidden rounded-3xl border border-white/10 shadow-xl"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={feature.image}
                 alt={feature.title}
@@ -258,6 +262,7 @@ export default function LandingPage() {
 
 
       <section className="relative overflow-hidden" aria-label="Let\'s play">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={CTA_TEXTURE}
           alt="Golf texture"

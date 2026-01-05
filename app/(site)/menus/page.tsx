@@ -8,6 +8,7 @@ import { MenuModal } from "@/components/menus/MenuModal";
 import { ExternalLinkButton } from "@/components/buttons/ExternalLinkButton";
 import { NoticeBanner } from "@/components/landing/NoticeBanner";
 import useNoticeInfo from "@/hooks/useNoticeInfo";
+import type { MenuModalLocation } from "@/components/menus/MenuModal";
 
 const HERO_IMAGE = "https://storage.googleapis.com/thebunker-assets/thebunker/Food%20Wings%20Close%20Up.jpg";
 
@@ -19,13 +20,48 @@ const ORDERING_LINKS: Array<{ key: string; label: string }> = [
   { key: "riverHouse", label: "River House Room Service" },
 ];
 
+const resolveStringValue = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim() ? value : fallback;
+
+const resolveMenuEntries = (value: unknown): NonNullable<MenuModalLocation["menus"]> => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(
+      (menu): menu is Record<string, unknown> =>
+        Boolean(menu) && typeof menu === "object",
+    )
+    .map((menu) => {
+      const name = resolveStringValue(menu.name);
+      const pdf =
+        resolveStringValue(menu.pdf) ||
+        resolveStringValue(menu.downloadUrl) ||
+        resolveStringValue(menu.url);
+      const storagePath = resolveStringValue(menu.storagePath);
+
+      const entry: { name?: string; pdf?: string; storagePath?: string } = {};
+      if (name) {
+        entry.name = name;
+      }
+      if (pdf) {
+        entry.pdf = pdf;
+      }
+      if (storagePath) {
+        entry.storagePath = storagePath;
+      }
+
+      return entry;
+    })
+    .filter((menu) => menu.name || menu.pdf || menu.storagePath);
+};
+
 export default function MenusPage() {
   const firebase = useFirebase();
   const { locations } = useLocations(firebase);
   const { noticeInfo } = useNoticeInfo(firebase);
-  const [selectedLocation, setSelectedLocation] = useState<
-    (typeof locations)[number] | null
-  >(null);
+  const [selectedLocation, setSelectedLocation] = useState<MenuModalLocation | null>(null);
 
   const orderedLocations = useMemo(() => {
     if (!locations.length) {
@@ -41,7 +77,13 @@ export default function MenusPage() {
       "guilderland",
     ];
 
-    const map = new Map(locations.map((loc) => [loc.id, loc]));
+    const map = new Map<string, (typeof locations)[number]>();
+    locations.forEach((loc) => {
+      const locationId = resolveStringValue(loc.id);
+      if (locationId) {
+        map.set(locationId, loc);
+      }
+    });
     const ordered: typeof locations = [];
     order.forEach((id) => {
       const entry = map.get(id);
@@ -50,15 +92,15 @@ export default function MenusPage() {
       }
     });
     locations.forEach((loc) => {
-      if (!order.includes(loc.id)) {
+      const locationId = resolveStringValue(loc.id);
+      if (!locationId || !order.includes(locationId)) {
         ordered.push(loc);
       }
     });
     return ordered.filter(
       (locationItem) =>
         locationItem &&
-        typeof locationItem.name === "string" &&
-        locationItem.name.trim(),
+        Boolean(resolveStringValue(locationItem.name)),
     );
   }, [locations]);
 
@@ -74,6 +116,7 @@ export default function MenusPage() {
       ) : null}
 
       <section className="relative h-64 w-full overflow-hidden md:h-80">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={HERO_IMAGE}
           alt="Menus hero"
@@ -112,27 +155,36 @@ export default function MenusPage() {
 
           <div className="space-y-6">
             {orderedLocations.map((location) => {
-              const hasBrunchMenu = Array.isArray(location.menus)
-                ? location.menus.some((menu) => {
-                    const name = (menu?.name || "").toLowerCase();
-                    const hasPdf = menu?.pdf || menu?.storagePath;
-                    return hasPdf && name.includes("brunch");
-                  })
-                : false;
+              const locationName = resolveStringValue(location.name, "Location");
+              const locationId = resolveStringValue(location.id);
+              const menus = resolveMenuEntries(location.menus);
+              const hasBrunchMenu = menus.some((menu) => {
+                const name = resolveStringValue(menu?.name).toLowerCase();
+                const hasPdf = Boolean(
+                  resolveStringValue(menu?.pdf) ||
+                    resolveStringValue(menu?.storagePath),
+                );
+                return hasPdf && name.includes("brunch");
+              });
 
               return (
                 <div
-                  key={location.id}
+                  key={locationId || locationName}
                   className="rounded-3xl border border-white/10 bg-black/40 p-4 shadow-lg"
                 >
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-2">
                       <button
                         type="button"
-                        onClick={() => setSelectedLocation(location)}
+                        onClick={() =>
+                          setSelectedLocation({
+                            name: locationName,
+                            menus,
+                          })
+                        }
                         className="text-left text-xl font-semibold uppercase tracking-wide text-primary transition hover:text-primary/80"
                       >
-                        {location.name} Menu
+                        {locationName} Menu
                       </button>
                       {hasBrunchMenu ? (
                         <span className="inline-flex items-center rounded-full bg-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
@@ -142,8 +194,8 @@ export default function MenusPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {ORDERING_LINKS.map(({ key, label }) => {
-                        const url = location[key];
-                        if (typeof url !== "string" || !url) {
+                        const url = resolveStringValue(location[key]);
+                        if (!url) {
                           return null;
                         }
                         return (

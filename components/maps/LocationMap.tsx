@@ -5,6 +5,33 @@ import clsx from "clsx";
 import { loadGoogleMapsApi } from "@/utils/googleMaps";
 import { createLocationMarkerIcon } from "@/utils/mapIcons";
 
+type MapCenter = { lat: number; lng: number };
+
+type MapInstance = {
+  setCenter: (center: MapCenter) => void;
+  setZoom: (zoom: number) => void;
+};
+
+type MarkerInstance = {
+  setPosition: (center: MapCenter) => void;
+  setTitle: (title: string) => void;
+  setIcon: (icon: unknown) => void;
+};
+
+type MapsApi = {
+  Map: new (element: Element, options: Record<string, unknown>) => MapInstance;
+  Marker: new (options: {
+    position: MapCenter;
+    map?: unknown;
+    title?: string;
+    icon?: unknown;
+  }) => MarkerInstance;
+  SymbolPath: {
+    BACKWARD_CLOSED_ARROW: unknown;
+    CIRCLE: unknown;
+  };
+};
+
 type LocationMapProps = {
   lat?: number | string | null;
   lng?: number | string | null;
@@ -39,10 +66,10 @@ export function LocationMap({
   missingKeyMessage,
 }: LocationMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapInstanceRef = useRef<MapInstance | null>(null);
+  const markerRef = useRef<MarkerInstance | null>(null);
 
-  const [mapsApi, setMapsApi] = useState<any>(null);
+  const [mapsApi, setMapsApi] = useState<MapsApi | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
@@ -69,7 +96,7 @@ export function LocationMap({
     loadGoogleMapsApi(apiKey)
       .then((maps) => {
         if (!cancelled) {
-          setMapsApi(maps);
+          setMapsApi(maps as MapsApi);
           setLoadError(null);
         }
       })

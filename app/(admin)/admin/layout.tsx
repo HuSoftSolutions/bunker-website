@@ -38,6 +38,7 @@ import { useFittingsInquiries } from "@/hooks/useFittingsInquiries";
 import { useMembershipInquiries } from "@/hooks/useMembershipInquiries";
 import { useEventsInquiries } from "@/hooks/useEventsInquiries";
 import type Firebase from "@/lib/firebase/client";
+import type { LocationRecord } from "@/data/locationConfig";
 import { useEffect, useMemo, useState } from "react";
 import {
   ADMIN_INQUIRY_READ_STATE_EVENT,
@@ -94,14 +95,45 @@ function computeUnreadCount<T>(
   }, 0);
 }
 
+function readAuthString(
+  authUser: Record<string, unknown> | null,
+  key: string,
+) {
+  if (!authUser || typeof authUser !== "object") {
+    return undefined;
+  }
+  const value = authUser[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function hasAdminRole(authUser: Record<string, unknown> | null) {
+  if (!authUser || typeof authUser !== "object") {
+    return false;
+  }
+  const roles = authUser["roles"];
+  if (!roles || typeof roles !== "object") {
+    return false;
+  }
+  return Boolean((roles as Record<string, unknown>).ADMIN);
+}
+
+function resolveLocationId(location: LocationRecord | undefined) {
+  const value = location?.id;
+  return typeof value === "string" ? value : "";
+}
+
+function resolveLocationName(location: LocationRecord | undefined) {
+  const value = location?.name;
+  return typeof value === "string" && value.trim() ? value : "Location";
+}
+
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const condition = useMemo(
-    () => (authUser: Record<string, unknown> | null) =>
-      Boolean(authUser && (authUser as any)?.roles?.ADMIN),
+    () => (authUser: Record<string, unknown> | null) => hasAdminRole(authUser),
     [],
   );
 
@@ -127,10 +159,8 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { locations } = useLocations(firebase as Firebase);
 
-  const displayName =
-    ((authUser as any)?.displayName as string | undefined) ||
-    ((authUser as any)?.name as string | undefined);
-  const email = (authUser as any)?.email as string | undefined;
+  const displayName = readAuthString(authUser, "displayName") ?? readAuthString(authUser, "name");
+  const email = readAuthString(authUser, "email");
   const initials = (displayName || email || "Admin")
     .split(" ")
     .map((part) => part[0])
@@ -172,8 +202,12 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     null;
 
   const selectedLocationId =
-    (locationParam && locations.find((location) => location.id === locationParam)?.id) ||
-    locations[0]?.id ||
+    (locationParam
+      ? resolveLocationId(
+          locations.find((location) => resolveLocationId(location) === locationParam),
+        )
+      : "") ||
+    resolveLocationId(locations[0]) ||
     "";
 
   const handleLocationChange = (nextId: string) => {
@@ -312,7 +346,7 @@ function AdminSidebar({
   firebase: Firebase;
   groups: AdminNavGroup[];
   activeHref: string | null;
-  locations: Array<{ id: string; name?: string }>;
+  locations: LocationRecord[];
   selectedLocationId?: string;
   onLocationChange?: (locationId: string) => void;
   displayName?: string;
@@ -343,6 +377,7 @@ function AdminSidebar({
   }, []);
 
   const inquiryCounts = useMemo(() => {
+    void version;
     const computeCounts = <T,>(
       kind: AdminInquiryKind,
       inquiries: T[],
@@ -420,7 +455,6 @@ function AdminSidebar({
     "league-inquiries": "league",
     "membership-inquiries": "membership",
     "fitting-inquiries": "fitting",
-    "event-inquiries": "event",
   };
 
   return (
@@ -448,8 +482,12 @@ function AdminSidebar({
                   className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs uppercase tracking-wide text-white/80 focus:border-primary focus:outline-none"
                 >
                   {locations.map((location) => (
-                    <option key={location.id} value={location.id} className="text-black">
-                      {location.name ?? "Location"}
+                    <option
+                      key={`${resolveLocationId(location) || location.name || "location"}`}
+                      value={resolveLocationId(location)}
+                      className="text-black"
+                    >
+                      {resolveLocationName(location)}
                     </option>
                   ))}
                 </select>

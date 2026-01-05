@@ -84,22 +84,33 @@ export function JuniorGolfSettingsPanel({ firebase }: JuniorGolfSettingsPanelPro
           heroImageUrl: typeof data?.heroImageUrl === "string" ? data.heroImageUrl : DEFAULT_STATE.heroImageUrl,
           programs: Array.isArray(data?.programs)
             ? data.programs
-                .map((p: any) => ({
-                  id: createId("program"),
-                  title: typeof p?.title === "string" ? p.title : "",
-                  description: typeof p?.description === "string" ? p.description : "",
-                  ctaLabel: typeof p?.ctaLabel === "string" ? p.ctaLabel : "",
-                  ctaUrl: typeof p?.ctaUrl === "string" ? p.ctaUrl : "",
-                }))
+                .map((p: unknown) => {
+                  const record = p as Record<string, unknown>;
+                  return {
+                    id: createId("program"),
+                    title: typeof record?.title === "string" ? record.title : "",
+                    description:
+                      typeof record?.description === "string" ? record.description : "",
+                    ctaLabel: typeof record?.ctaLabel === "string" ? record.ctaLabel : "",
+                    ctaUrl: typeof record?.ctaUrl === "string" ? record.ctaUrl : "",
+                  };
+                })
                 .filter((p: ProgramForm) => p.title.trim().length > 0)
             : [],
           lessonRates: Array.isArray(data?.lessonRates)
             ? data.lessonRates
-                .map((r: any) => ({
-                  id: createId("rate"),
-                  title: typeof r?.title === "string" ? r.title : "",
-                  lines: Array.isArray(r?.lines) ? r.lines.join("\n") : typeof r?.lines === "string" ? r.lines : "",
-                }))
+                .map((r: unknown) => {
+                  const record = r as Record<string, unknown>;
+                  return {
+                    id: createId("rate"),
+                    title: typeof record?.title === "string" ? record.title : "",
+                    lines: Array.isArray(record?.lines)
+                      ? record.lines.join("\n")
+                      : typeof record?.lines === "string"
+                        ? record.lines
+                        : "",
+                  };
+                })
                 .filter((r: RateForm) => r.title.trim().length > 0)
             : [],
         };

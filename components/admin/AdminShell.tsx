@@ -1,15 +1,7 @@
 import { Heading } from "@/ui-kit/heading";
 
-type AdminNavItem = {
-  href: string;
-  label: string;
-};
-
 type AdminShellProps = {
   title: string;
-  description?: string;
-  navItems?: readonly AdminNavItem[];
-  activeHref?: string;
   toolbar?: React.ReactNode;
   alert?: React.ReactNode;
   children: React.ReactNode;
@@ -17,9 +9,6 @@ type AdminShellProps = {
 
 export function AdminShell({
   title,
-  description,
-  navItems = [],
-  activeHref,
   toolbar,
   alert,
   children,

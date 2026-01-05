@@ -74,8 +74,7 @@ type InquiryTabKey =
   | "lessons"
   | "leagues"
   | "fittings"
-  | "memberships"
-  | "events";
+  | "memberships";
 type InquiryFormKey = keyof InquirySettingsFormState;
 
 const INQUIRY_TABS: readonly {
@@ -154,17 +153,6 @@ const INQUIRY_TABS: readonly {
     boardStatusesKey: "membershipsBoardStatuses",
     sendLabel: "Send emails for membership inquiries",
     placeholder: "memberships@getinthebunker.golf",
-  },
-  {
-    key: "events",
-    label: "Events",
-    description: "Comma or newline separated list of recipient emails.",
-    recipientsKey: "eventsDefaultRecipients",
-    sendEmailsKey: "eventsSendEmails",
-    boardEnabledKey: "eventsBoardEnabled",
-    boardStatusesKey: "eventsBoardStatuses",
-    sendLabel: "Send emails for event inquiries",
-    placeholder: "events@getinthebunker.golf",
   },
 ];
 

@@ -5,6 +5,37 @@ import clsx from "clsx";
 import { loadGoogleMapsApi } from "@/utils/googleMaps";
 import { createLocationMarkerIcon, createUserMarkerIcon } from "@/utils/mapIcons";
 
+type MapCenter = { lat: number; lng: number };
+
+type MapInstance = {
+  fitBounds: (bounds: unknown, padding?: number) => void;
+  setCenter: (center: MapCenter) => void;
+  setZoom: (zoom: number) => void;
+};
+
+type MarkerInstance = {
+  setMap: (map: unknown | null) => void;
+  setPosition: (center: MapCenter) => void;
+  setIcon: (icon: unknown) => void;
+  setTitle: (title: string) => void;
+};
+
+type MapsApi = {
+  Map: new (element: Element, options: Record<string, unknown>) => MapInstance;
+  Marker: new (options: {
+    position: MapCenter;
+    map?: unknown;
+    title?: string;
+    icon?: unknown;
+  }) => MarkerInstance;
+  LatLng: new (lat: number, lng: number) => unknown;
+  LatLngBounds: new () => { extend: (point: unknown) => void };
+  SymbolPath: {
+    BACKWARD_CLOSED_ARROW: unknown;
+    CIRCLE: unknown;
+  };
+};
+
 type MarkerPoint = {
   id: string;
   lat: number;
@@ -26,7 +57,7 @@ export type NearestLocationsMapProps = {
 
 declare global {
   interface Window {
-    google?: any;
+    google?: unknown;
   }
 }
 
@@ -37,13 +68,12 @@ export function NearestLocationsMap({
   heightClassName = "h-64",
 }: NearestLocationsMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markerRefs = useRef<Map<string, any>>(new Map());
+  const mapInstanceRef = useRef<MapInstance | null>(null);
+  const markerRefs = useRef<Map<string, MarkerInstance>>(new Map());
 
-  const [mapsApi, setMapsApi] = useState<any>(null);
+  const [mapsApi, setMapsApi] = useState<MapsApi | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const apiKey = useMemo(() => process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "", []);
-  const hasMaps = Boolean(mapsApi);
 
   const missingKeyText = "Map preview unavailable. Add a Google Maps API key to enable this feature.";
 
@@ -57,7 +87,7 @@ export function NearestLocationsMap({
     loadGoogleMapsApi(apiKey)
       .then((maps) => {
         if (!cancelled) {
-          setMapsApi(maps);
+          setMapsApi(maps as MapsApi);
           setLoadError(null);
         }
       })

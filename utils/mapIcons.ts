@@ -1,6 +1,15 @@
 const PRIMARY_COLOR = "#C12126";
 
-export const createLocationMarkerIcon = (maps: any) => ({
+type MapsSymbolPath = {
+  BACKWARD_CLOSED_ARROW: unknown;
+  CIRCLE: unknown;
+};
+
+type MapsLike = {
+  SymbolPath: MapsSymbolPath;
+};
+
+export const createLocationMarkerIcon = (maps: MapsLike) => ({
   path: maps.SymbolPath.BACKWARD_CLOSED_ARROW,
   scale: 6,
   fillColor: PRIMARY_COLOR,
@@ -9,7 +18,7 @@ export const createLocationMarkerIcon = (maps: any) => ({
   strokeWeight: 2,
 });
 
-export const createUserMarkerIcon = (maps: any) => ({
+export const createUserMarkerIcon = (maps: MapsLike) => ({
   path: maps.SymbolPath.CIRCLE,
   scale: 9,
   fillColor: "#ffffff",
@@ -17,4 +26,3 @@ export const createUserMarkerIcon = (maps: any) => ({
   strokeColor: PRIMARY_COLOR,
   strokeWeight: 3,
 });
-

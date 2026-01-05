@@ -16,7 +16,7 @@ import {
   sub,
   parse,
 } from "date-fns";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import Firebase from "@/lib/firebase/client";
 import { onSnapshot, type DocumentData, type DocumentSnapshot } from "firebase/firestore";
@@ -26,13 +26,16 @@ type CalendarEvent = {
   timestamp: { toDate: () => Date } | { seconds: number };
   parsedDate: Date;
   timestampDate: Date;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 type CalendarProps = {
-  location: Record<string, any> | null;
+  location: Record<string, unknown> | null;
   firebase: Firebase;
 };
+
+const resolveStringValue = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim() ? value : fallback;
 
 function toDateFromTimestamp(timestamp: CalendarEvent["timestamp"]) {
   if (!timestamp) {
@@ -53,11 +56,12 @@ export function Calendar({ location, firebase }: CalendarProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!location?.id) {
+    const locationId = resolveStringValue(location?.id);
+    if (!locationId) {
       return;
     }
 
-    const docRef = firebase.calendarEventsRef(location.id);
+    const docRef = firebase.calendarEventsRef(locationId);
     const unsubscribe = onSnapshot(
       docRef,
       (docSnapshot: DocumentSnapshot<DocumentData>) => {
@@ -101,7 +105,7 @@ export function Calendar({ location, firebase }: CalendarProps) {
     return () => {
       unsubscribe();
     };
-  }, [firebase, location?.id, currentDate]);
+  }, [firebase, location, currentDate]);
 
   const daysOfWeek = useMemo(
     () =>
@@ -184,12 +188,18 @@ export function Calendar({ location, firebase }: CalendarProps) {
               </div>
               <div className="mt-1 flex flex-col gap-1">
                 {dayEvents.map((event) => (
-                  <div
-                    key={`${event.date}-${event.title}`}
-                    className="rounded-md bg-primary/20 px-2 py-1 text-[0.65rem] text-primary"
-                  >
-                    {event.title}
-                  </div>
+                  (() => {
+                    const eventTitle = resolveStringValue(event.title, "Event");
+
+                    return (
+                      <div
+                        key={`${event.date}-${eventTitle}`}
+                        className="rounded-md bg-primary/20 px-2 py-1 text-[0.65rem] text-primary"
+                      >
+                        {eventTitle}
+                      </div>
+                    );
+                  })()
                 ))}
               </div>
             </div>
@@ -210,18 +220,18 @@ export function Calendar({ location, firebase }: CalendarProps) {
         <ul className="flex flex-col gap-3 text-white/70">
           {events.slice(0, 8).map((event) => (
             <li
-              key={`${event.date}-${event.title}`}
+              key={`${event.date}-${resolveStringValue(event.title, "Event")}`}
               className="flex flex-col gap-0.5 rounded-xl bg-white/5 px-3 py-2"
             >
               <span className="text-xs font-semibold uppercase tracking-wide text-primary/90">
                 {format(event.parsedDate, "EEEE, MMMM do")}
               </span>
               <span className="text-sm font-semibold text-white">
-                {event.title ?? "Event"}
+                {resolveStringValue(event.title, "Event")}
               </span>
-              {event.description ? (
+              {resolveStringValue(event.description) ? (
                 <span className="text-xs text-white/70">
-                  {event.description}
+                  {resolveStringValue(event.description)}
                 </span>
               ) : null}
             </li>

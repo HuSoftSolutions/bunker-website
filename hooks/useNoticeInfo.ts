@@ -8,7 +8,7 @@ type NoticeMessage = {
   message?: string;
   link?: string;
   linkText?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 type InfoModalData = {
@@ -22,7 +22,7 @@ type InfoModalData = {
   linkText?: string;
   link2?: string;
   linkText2?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 type NoticeInfo = {
@@ -35,7 +35,7 @@ const normalizeInfoModal = (value: unknown): InfoModalData | undefined => {
     return undefined;
   }
 
-  const raw = value as Record<string, any>;
+  const raw = value as Record<string, unknown>;
   const normalizedMessage =
     typeof raw.msg === "string"
       ? raw.msg
@@ -58,7 +58,7 @@ const normalizeNoticeMsg = (value: unknown): NoticeMessage | undefined => {
     return undefined;
   }
 
-  const raw = value as Record<string, any>;
+  const raw = value as Record<string, unknown>;
   const normalizedMessage =
     typeof raw.message === "string"
       ? raw.message

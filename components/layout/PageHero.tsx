@@ -21,6 +21,7 @@ export function PageHero({
 
   return (
     <section className="relative h-56 w-full overflow-hidden bg-black md:h-72">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={heroImage}
         alt={imageAlt || title}

@@ -5,7 +5,7 @@ const MENU_STORAGE_BASE =
 
 const menuUrl = (filename: string) => `${MENU_STORAGE_BASE}/${filename}`;
 
-type LocationRecord = Record<string, any>;
+type LocationRecord = Record<string, unknown>;
 
 const TB_G_MENU = menuUrl('Bunker_G_Menu_20230911.pdf');
 const TB_KIDS_MENU = menuUrl('Bunker_Kids_Menu.pdf');
@@ -621,8 +621,9 @@ const locations: LocationRecord[] = [
 
 const locationsById = locations.reduce<Record<string, LocationRecord>>(
   (acc, location) => {
-    if (location.id) {
-      acc[location.id] = location;
+    const locationId = typeof location.id === "string" ? location.id : "";
+    if (locationId) {
+      acc[locationId] = location;
     }
     return acc;
   },

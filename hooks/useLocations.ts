@@ -13,7 +13,25 @@ type MenuRecord = {
   storagePath?: string | null;
   downloadUrl?: unknown;
   url?: unknown;
-  [key: string]: any;
+  [key: string]: unknown;
+};
+
+const resolveMenuRecord = (value: unknown): MenuRecord | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as MenuRecord;
+};
+
+const resolveMenuArray = (value: unknown): MenuRecord[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value.filter(
+    (menu): menu is MenuRecord => Boolean(menu) && typeof menu === "object",
+  );
 };
 
 const menuPdfFallback = (menu: MenuRecord = {}) =>
@@ -41,7 +59,7 @@ const normalizeLegacyMenu = (
     return null;
   }
 
-  const entry: Record<string, any> = {};
+  const entry: Record<string, unknown> = {};
   if (name) {
     entry.name = name;
   }
@@ -105,26 +123,44 @@ const mergeMenus = (
   return merged.filter((menu) => menu && menu.name);
 };
 
-const mergeRates = (
-  fallbackRates: Record<string, any> | null | undefined,
-  remoteRates: Record<string, any> | null | undefined,
-) => {
-  if (remoteRates === undefined) {
-    return fallbackRates;
+const resolveRecordValue = (
+  value: unknown,
+): Record<string, unknown> | null | undefined => {
+  if (value === undefined || value === null) {
+    return value;
   }
 
-  if (!fallbackRates) {
-    return remoteRates;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return null;
+};
+
+const mergeRates = (fallbackRates: unknown, remoteRates: unknown) => {
+  if (remoteRates === undefined) {
+    return resolveRecordValue(fallbackRates);
   }
 
   if (remoteRates === null) {
     return null;
   }
 
+  const fallbackResolved = resolveRecordValue(fallbackRates);
+  const remoteResolved = resolveRecordValue(remoteRates);
+
+  if (!fallbackResolved) {
+    return remoteResolved;
+  }
+
+  if (!remoteResolved) {
+    return fallbackResolved;
+  }
+
   return {
-    ...fallbackRates,
-    ...remoteRates,
-    bays: remoteRates.bays ?? fallbackRates.bays,
+    ...fallbackResolved,
+    ...remoteResolved,
+    bays: remoteResolved.bays ?? fallbackResolved.bays,
   };
 };
 
@@ -165,16 +201,19 @@ export const mergeLocationRecord = (
   merged.careerEmails =
     remoteLocation.careerEmails ?? fallbackLocation.careerEmails;
 
-  merged.menus = mergeMenus(fallbackLocation.menus, remoteLocation.menus);
+  const fallbackMenus = resolveMenuArray(fallbackLocation.menus) ?? [];
+  const remoteMenus = resolveMenuArray(remoteLocation.menus);
+  const mergedMenus = mergeMenus(fallbackMenus, remoteMenus);
+  merged.menus = mergedMenus;
 
   const legacyMenus = [
-    normalizeLegacyMenu(fallbackLocation.brunchMenu),
-    normalizeLegacyMenu(remoteLocation.brunchMenu),
+    normalizeLegacyMenu(resolveMenuRecord(fallbackLocation.brunchMenu)),
+    normalizeLegacyMenu(resolveMenuRecord(remoteLocation.brunchMenu)),
   ].filter(Boolean) as MenuRecord[];
 
   if (legacyMenus.length) {
     const existingByName = new Map<string, MenuRecord>(
-      merged.menus
+      mergedMenus
         .filter(
           (menu: MenuRecord): menu is MenuRecord & { name: string } =>
             Boolean(menu?.name),
@@ -193,7 +232,7 @@ export const mergeLocationRecord = (
         existing.storagePath =
           existing.storagePath || legacyMenu.storagePath;
       } else {
-        merged.menus.push(legacyMenu);
+        mergedMenus.push(legacyMenu);
         existingByName.set(key, legacyMenu);
       }
     });
@@ -201,12 +240,14 @@ export const mergeLocationRecord = (
 
   delete merged.brunchMenu;
 
-  merged.coordinates = remoteLocation.coordinates
+  const fallbackCoordinates = resolveRecordValue(fallbackLocation.coordinates);
+  const remoteCoordinates = resolveRecordValue(remoteLocation.coordinates);
+  merged.coordinates = remoteCoordinates
     ? {
-        ...fallbackLocation.coordinates,
-        ...remoteLocation.coordinates,
+        ...(fallbackCoordinates ?? {}),
+        ...remoteCoordinates,
       }
-    : fallbackLocation.coordinates;
+    : fallbackCoordinates;
 
   merged.amenities = fallbackLocation.amenities;
 
@@ -258,13 +299,18 @@ export const buildLocationList = (
 
   const seen = new Set<string>();
   const mergedLocations = remoteLocations.map((remote) => {
-    const fallback = FALLBACK_LOCATION_MAP[remote.id] || {};
-    seen.add(remote.id);
+    const remoteId = typeof remote.id === "string" ? remote.id : "";
+    const fallback = remoteId ? FALLBACK_LOCATION_MAP[remoteId] || {} : {};
+    if (remoteId) {
+      seen.add(remoteId);
+    }
     return mergeLocationRecord(fallback, remote);
   });
 
   FALLBACK_LOCATIONS.forEach((fallbackLocation) => {
-    if (!seen.has(fallbackLocation.id)) {
+    const fallbackId =
+      typeof fallbackLocation.id === "string" ? fallbackLocation.id : "";
+    if (!fallbackId || !seen.has(fallbackId)) {
       mergedLocations.push(fallbackLocation);
     }
   });
@@ -309,7 +355,9 @@ const useLocations = (firebase: Firebase) => {
     );
 
     return () => {
-      unsubscribe && unsubscribe();
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
   }, [firebase]);
 

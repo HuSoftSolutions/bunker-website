@@ -68,6 +68,7 @@ import {
 	useRef,
 	useState,
 	type Dispatch,
+	type MouseEvent,
 	type SetStateAction,
 } from "react";
 import { useSearchParams } from "next/navigation";
@@ -92,12 +93,11 @@ type BusinessTab =
   | "league-inquiries"
   | "membership-inquiries"
   | "fitting-inquiries"
-  | "event-inquiries"
   | "fittings"
   | "junior-golf"
   | "inquiry-settings";
 
-type LocationFormState = Record<string, any> | null;
+type LocationFormState = Record<string, unknown> | null;
 
 const cloneFormState = (value: LocationFormState): LocationFormState => {
   if (value === null) {
@@ -110,6 +110,16 @@ const cloneFormState = (value: LocationFormState): LocationFormState => {
     console.warn("[LocationsAdmin] failed to clone state", error);
     return value;
   }
+};
+
+const resolveStringValue = (value: unknown, fallback = "") =>
+  typeof value === "string" ? value : fallback;
+
+const resolveRecordValue = (value: unknown) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
 };
 
 type LocationAdminState = {
@@ -357,7 +367,7 @@ const normalizeNoticeMsg = (value: unknown): NoticeBannerFormState => {
     return { ...NOTICE_INFO_DEFAULT_STATE.noticeMsg };
   }
 
-  const raw = value as Record<string, any>;
+  const raw = value as Record<string, unknown>;
   const message =
     typeof raw.message === "string"
       ? raw.message
@@ -379,7 +389,7 @@ const normalizeInfoModal = (value: unknown): InfoModalFormState => {
     return { ...NOTICE_INFO_DEFAULT_STATE.infoModal };
   }
 
-  const raw = value as Record<string, any>;
+  const raw = value as Record<string, unknown>;
   const message =
     typeof raw.msg === "string"
       ? raw.msg
@@ -622,13 +632,10 @@ function sanitizeLocationPayload(form: LocationFormState) {
     return {};
   }
 
-  const {
-    id,
-    amenities,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    __meta,
-    ...rest
-  } = form;
+  const rest = { ...form };
+  delete rest.__meta;
+  delete rest.id;
+  delete rest.amenities;
 
   const payload: Record<string, unknown> = {};
 
@@ -746,7 +753,7 @@ type CalendarFormEvent = {
   time: string;
   showOnFeed: boolean;
   locationName: string;
-  extras: Record<string, any>;
+  extras: Record<string, unknown>;
 };
 
 type CalendarAdminState = {
@@ -767,7 +774,7 @@ const generateEventId = () => {
   return `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 };
 
-const toDateFromTimestampValue = (timestamp: any): Date | null => {
+const toDateFromTimestampValue = (timestamp: unknown): Date | null => {
   if (!timestamp) {
     return null;
   }
@@ -775,12 +782,22 @@ const toDateFromTimestampValue = (timestamp: any): Date | null => {
     if (timestamp instanceof Date && !Number.isNaN(timestamp.getTime())) {
       return timestamp;
     }
-    if (typeof timestamp.toDate === "function") {
-      const date = timestamp.toDate();
+    if (
+      typeof timestamp === "object" &&
+      timestamp !== null &&
+      "toDate" in timestamp &&
+      typeof (timestamp as { toDate?: () => Date }).toDate === "function"
+    ) {
+      const date = (timestamp as { toDate: () => Date }).toDate();
       return Number.isNaN(date.getTime()) ? null : date;
     }
-    if (typeof timestamp.seconds === "number") {
-      return new Date(timestamp.seconds * 1000);
+    if (
+      typeof timestamp === "object" &&
+      timestamp !== null &&
+      "seconds" in timestamp &&
+      typeof (timestamp as { seconds?: number }).seconds === "number"
+    ) {
+      return new Date((timestamp as { seconds: number }).seconds * 1000);
     }
   } catch {
     // ignore malformed values
@@ -788,8 +805,8 @@ const toDateFromTimestampValue = (timestamp: any): Date | null => {
   return null;
 };
 
-const normalizeCalendarEvent = (event: Record<string, any>): CalendarFormEvent => {
-  const extras: Record<string, any> = { ...event };
+const normalizeCalendarEvent = (event: Record<string, unknown>): CalendarFormEvent => {
+  const extras: Record<string, unknown> = { ...event };
   const timestampDate = toDateFromTimestampValue(event?.timestamp);
   const normalizedEvent: CalendarFormEvent = {
     id:
@@ -859,7 +876,7 @@ const buildTimestampFromForm = (date: string, time: string) => {
 
 const serializeCalendarEvent = (event: CalendarFormEvent) => {
   const extras = { ...(event.extras || {}) };
-  const payload: Record<string, any> = {
+  const payload: Record<string, unknown> = {
     ...extras,
     id: event.id,
     title: event.title,
@@ -914,7 +931,7 @@ function useCalendarAdminState(
           const rawEvents = Array.isArray(data?.calendarEvents)
             ? data.calendarEvents
             : [];
-          const normalized = rawEvents.map((entry: Record<string, any>) =>
+          const normalized = rawEvents.map((entry: Record<string, unknown>) =>
             normalizeCalendarEvent(entry),
           );
           const cloned = cloneCalendarEvents(normalized);
@@ -991,7 +1008,10 @@ export default function LocationsAdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("general");
   const locationParam = searchParams?.get("locationId");
   const [selectedLocationId, setSelectedLocationId] = useState<string>(
-    () => locationParam ?? FALLBACK_LOCATIONS[0]?.id ?? "",
+    () => {
+      const fallbackId = FALLBACK_LOCATIONS[0]?.id;
+      return locationParam ?? (typeof fallbackId === "string" ? fallbackId : "");
+    },
   );
 
   useEffect(() => {
@@ -1020,7 +1040,6 @@ export default function LocationsAdminPage() {
       "league-inquiries",
       "membership-inquiries",
       "fitting-inquiries",
-      "event-inquiries",
       "fittings",
       "junior-golf",
       "inquiry-settings",
@@ -1057,7 +1076,10 @@ export default function LocationsAdminPage() {
 
   useEffect(() => {
     if (!selectedLocationId && locations.length) {
-      setSelectedLocationId(locations[0].id);
+      const nextId = locations[0]?.id;
+      if (typeof nextId === "string") {
+        setSelectedLocationId(nextId);
+      }
     }
   }, [locations, selectedLocationId]);
 
@@ -1177,10 +1199,6 @@ export default function LocationsAdminPage() {
             <FittingInquiriesPanel firebase={firebase} />
           ) : null}
 
-          {businessTab === "event-inquiries" ? (
-            <EventInquiriesPanel firebase={firebase} />
-          ) : null}
-
           {businessTab === "fittings" ? (
             <FittingsSettingsPanel firebase={firebase} />
           ) : null}
@@ -1208,7 +1226,13 @@ export default function LocationsAdminPage() {
                 onReset={reset}
                 firebase={firebase}
                 calendarState={calendarState}
-                defaultLocationName={form?.name ?? selectedLocation?.name ?? ""}
+                defaultLocationName={
+                  typeof form?.name === "string"
+                    ? form.name
+                    : typeof selectedLocation?.name === "string"
+                      ? selectedLocation.name
+                      : ""
+                }
               />
             ) : (
               <p className="text-sm text-white/60">Select a location to begin editing.</p>
@@ -1481,6 +1505,7 @@ function BusinessSettingsPanel({
               {form?.membershipHeroImage?.url ? (
                 <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40">
                   <div className="relative aspect-[16/9] w-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={form.membershipHeroImage.url}
                       alt="Current membership hero"
@@ -1913,7 +1938,7 @@ function TabContent({
   defaultLocationName,
 }: {
   tab: AdminTab;
-  form: Record<string, any>;
+  form: Record<string, unknown>;
   setForm: Dispatch<SetStateAction<LocationFormState>>;
   saving: boolean;
   onSave: () => Promise<void>;
@@ -1971,22 +1996,22 @@ function TabContent({
           menus={Array.isArray(form.menus) ? form.menus : []}
           onChange={(menus) => handleInputChange("menus", menus)}
           firebase={firebase}
-          locationId={form.id}
+          locationId={resolveStringValue(form.id)}
         />
       ) : null}
 
       {tab === "beverages" ? (
         <BeverageMenusTab
           firebase={firebase}
-          locationId={form.id}
-          defaultLocationName={form.name ?? defaultLocationName ?? ""}
+          locationId={resolveStringValue(form.id)}
+          defaultLocationName={resolveStringValue(form.name, defaultLocationName ?? "")}
         />
       ) : null}
 
       {tab === "rates" ? (
         <RatesTab
-          nonPeakRates={form.nonPeakRates}
-          peakRates={form.peakRates}
+          nonPeakRates={resolveRecordValue(form.nonPeakRates)}
+          peakRates={resolveRecordValue(form.peakRates)}
           onChange={(field, value) => handleInputChange(field, value)}
         />
       ) : null}
@@ -2016,7 +2041,7 @@ function TabContent({
         <MapTab
           coordinates={form.coordinates ?? { lat: "", lng: "" }}
           onChange={(coordinates) => handleInputChange("coordinates", coordinates)}
-          locationName={form.name}
+          locationName={resolveStringValue(form.name)}
         />
       ) : null}
 
@@ -2025,7 +2050,7 @@ function TabContent({
 }
 
 type GeneralTabProps = {
-  form: Record<string, any>;
+  form: Record<string, unknown>;
   onChange: (field: string, value: unknown) => void;
 };
 
@@ -2033,16 +2058,17 @@ function GeneralTab({ form, onChange }: GeneralTabProps) {
   const newItemsToggleId = useId();
   const noticeToggleId = useId();
 
-  const notice = useMemo(
-    () => ({
-      showNoticeMsg: Boolean(form.notice?.showNoticeMsg),
-      title: form.notice?.title ?? "",
-      message: form.notice?.message ?? "",
-      link: form.notice?.link ?? "",
-      linkText: form.notice?.linkText ?? "",
-    }),
-    [form.notice],
-  );
+  const notice = useMemo(() => {
+    const noticeRecord = resolveRecordValue(form.notice);
+
+    return {
+      showNoticeMsg: Boolean(noticeRecord?.showNoticeMsg),
+      title: resolveStringValue(noticeRecord?.title),
+      message: resolveStringValue(noticeRecord?.message),
+      link: resolveStringValue(noticeRecord?.link),
+      linkText: resolveStringValue(noticeRecord?.linkText),
+    };
+  }, [form.notice]);
 
   const updateNotice = useCallback(
     (field: keyof typeof notice, value: unknown) => {
@@ -2060,28 +2086,28 @@ function GeneralTab({ form, onChange }: GeneralTabProps) {
         <FormField label="Location Name">
           <Input
             type="text"
-            value={form.name ?? ""}
+            value={resolveStringValue(form.name)}
             onChange={(event) => onChange("name", event.target.value)}
           />
         </FormField>
         <FormField label="Phone">
           <Input
             type="text"
-            value={form.phone ?? ""}
+            value={resolveStringValue(form.phone)}
             onChange={(event) => onChange("phone", event.target.value)}
           />
         </FormField>
         <FormField label="Email">
           <Input
             type="email"
-            value={form.email ?? ""}
+            value={resolveStringValue(form.email)}
             onChange={(event) => onChange("email", event.target.value)}
           />
         </FormField>
         <FormField label="Booking URL">
           <Input
             type="text"
-            value={form.url ?? ""}
+            value={resolveStringValue(form.url)}
             onChange={(event) => onChange("url", event.target.value)}
           />
         </FormField>
@@ -2089,7 +2115,7 @@ function GeneralTab({ form, onChange }: GeneralTabProps) {
 
       <FormField label="Address">
         <Textarea
-          value={form.address ?? ""}
+          value={resolveStringValue(form.address)}
           onChange={(event) => onChange("address", event.target.value)}
           rows={4}
         />
@@ -2098,14 +2124,16 @@ function GeneralTab({ form, onChange }: GeneralTabProps) {
       <FormField label="Hours">
         <Input
           type="text"
-          value={form.hoursFull ?? ""}
+          value={resolveStringValue(form.hoursFull)}
           onChange={(event) => onChange("hoursFull", event.target.value)}
         />
       </FormField>
 
       <SwitchField>
         <Label htmlFor={newItemsToggleId}>Highlight New Items</Label>
-        <Description>Toggles the "New Items" badge for this location.</Description>
+        <Description>
+          Toggles the &quot;New Items&quot; badge for this location.
+        </Description>
         <Switch
           id={newItemsToggleId}
           checked={Boolean(form.newItems)}
@@ -2640,8 +2668,8 @@ function CalendarTab({
                     <div className="flex justify-end gap-2">
                       <Button
                         outline
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                          event.stopPropagation();
                           moveEvent(index, -1);
                         }}
                         disabled={index === 0}
@@ -2650,8 +2678,8 @@ function CalendarTab({
                       </Button>
                       <Button
                         outline
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                          event.stopPropagation();
                           moveEvent(index, 1);
                         }}
                         disabled={index === events.length - 1}
@@ -2698,8 +2726,8 @@ function CalendarTab({
                 <div className="flex items-center gap-2">
                   <Button
                     outline
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                      event.stopPropagation();
                       moveEvent(index, -1);
                     }}
                     disabled={index === 0}
@@ -2708,8 +2736,8 @@ function CalendarTab({
                   </Button>
                   <Button
                     outline
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                      event.stopPropagation();
                       moveEvent(index, 1);
                     }}
                     disabled={index === events.length - 1}
@@ -2806,9 +2834,9 @@ function CalendarTab({
 }
 
 type RatesTabProps = {
-  nonPeakRates: Record<string, any> | null | undefined;
-  peakRates: Record<string, any> | null | undefined;
-  onChange: (field: "nonPeakRates" | "peakRates", value: Record<string, any> | null) => void;
+  nonPeakRates: Record<string, unknown> | null | undefined;
+  peakRates: Record<string, unknown> | null | undefined;
+  onChange: (field: "nonPeakRates" | "peakRates", value: Record<string, unknown> | null) => void;
 };
 
 function RatesTab({ nonPeakRates, peakRates, onChange }: RatesTabProps) {
@@ -2834,8 +2862,8 @@ function RatesEditor({
   onChange,
 }: {
   title: string;
-  value: Record<string, any> | null | undefined;
-  onChange: (value: Record<string, any> | null) => void;
+  value: Record<string, unknown> | null | undefined;
+  onChange: (value: Record<string, unknown> | null) => void;
 }) {
   const rates = value ?? { range: "", bays: [] };
   const [modalOpen, setModalOpen] = useState(false);
@@ -2844,12 +2872,6 @@ function RatesEditor({
 
   const updateRange = (next: string) => {
     onChange({ ...rates, range: next });
-  };
-
-  const updateBay = (index: number, partial: Record<string, string>) => {
-    const bays = Array.isArray(rates.bays) ? [...rates.bays] : [];
-    bays[index] = { ...bays[index], ...partial };
-    onChange({ ...rates, bays });
   };
 
   const addBay = () => {
@@ -2914,7 +2936,7 @@ function RatesEditor({
       <FormField label="Rate Range" hint="Displayed above the rate cards (e.g., Mon-Fri 9am-3pm).">
         <Input
           type="text"
-          value={rates.range ?? ""}
+          value={resolveStringValue(rates.range)}
           onChange={(event) => updateRange(event.target.value)}
         />
       </FormField>
@@ -2997,78 +3019,8 @@ function RatesEditor({
   );
 }
 
-type PromotionsTabProps = {
-  promotions: Array<Record<string, string>>;
-  onChange: (promotions: Array<Record<string, string>>) => void;
-};
-
-function PromotionsTab({ promotions, onChange }: PromotionsTabProps) {
-  const updatePromotion = (index: number, partial: Record<string, string>) => {
-    const next = promotions.map((promotion, idx) =>
-      idx === index ? { ...promotion, ...partial } : promotion,
-    );
-    onChange(next);
-  };
-
-  const addPromotion = () => {
-    onChange([...promotions, { title: "", body: "" }]);
-  };
-
-  const removePromotion = (index: number) => {
-    onChange(promotions.filter((_, idx) => idx !== index));
-  };
-
-  return (
-    <div className="space-y-4">
-      <Button outline onClick={addPromotion}>
-        Add Promotion
-      </Button>
-
-      {promotions.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-8 text-center">
-          <Text className="text-sm text-white/70">
-            No promotions yet. Use the button above to add one.
-          </Text>
-        </div>
-      ) : null}
-
-      <div className="space-y-4">
-        {promotions.map((promotion, index) => (
-          <div
-            key={`promotion-${index}`}
-            className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-5"
-          >
-            <div className="flex items-center justify-between">
-              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
-                Promotion {index + 1}
-              </Subheading>
-              <Button color="red" onClick={() => removePromotion(index)}>
-                Remove
-              </Button>
-            </div>
-            <FormField label="Title">
-              <Input
-                type="text"
-                value={promotion.title ?? ""}
-                onChange={(event) => updatePromotion(index, { title: event.target.value })}
-              />
-            </FormField>
-            <FormField label="Body" hint="Supports plain text.">
-              <Textarea
-                value={promotion.body ?? ""}
-                onChange={(event) => updatePromotion(index, { body: event.target.value })}
-                rows={5}
-              />
-            </FormField>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 type OrderingLinksTabProps = {
-  form: Record<string, any>;
+  form: Record<string, unknown>;
   onChange: (field: string, value: string) => void;
 };
 
@@ -3088,7 +3040,7 @@ function OrderingLinksTab({ form, onChange }: OrderingLinksTabProps) {
         <FormField key={field} label={label} hint={hint}>
           <Input
             type="text"
-            value={form[field] ?? ""}
+            value={resolveStringValue(form[field])}
             onChange={(event) => onChange(field, event.target.value)}
           />
         </FormField>
@@ -3145,72 +3097,6 @@ function CareerEmailsTab({ emails, onChange }: CareerEmailsTabProps) {
   );
 }
 
-type ImagesTabProps = {
-  images: string[];
-  onChange: (images: string[]) => void;
-};
-
-function ImagesTab({ images, onChange }: ImagesTabProps) {
-  const updateImage = (index: number, value: string) => {
-    const next = images.map((image, idx) => (idx === index ? value : image));
-    onChange(next);
-  };
-
-  const addImage = () => {
-    onChange([...images, ""]);
-  };
-
-  const removeImage = (index: number) => {
-    onChange(images.filter((_, idx) => idx !== index));
-  };
-
-  const moveImage = (index: number, direction: -1 | 1) => {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= images.length) {
-      return;
-    }
-    const next = [...images];
-    const [item] = next.splice(index, 1);
-    next.splice(targetIndex, 0, item);
-    onChange(next);
-  };
-
-  return (
-    <div className="space-y-4">
-      <Button outline onClick={addImage}>
-        Add Image URL
-      </Button>
-
-      <div className="space-y-3">
-        {images.map((image, index) => (
-          <div
-            key={`image-${index}`}
-            className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/30 p-4 md:flex-row md:items-center"
-          >
-            <Input
-              type="text"
-              value={image}
-              onChange={(event) => updateImage(index, event.target.value)}
-              placeholder="https://..."
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button outline onClick={() => moveImage(index, -1)} disabled={index === 0}>
-                Up
-              </Button>
-              <Button outline onClick={() => moveImage(index, 1)} disabled={index === images.length - 1}>
-                Down
-              </Button>
-              <Button color="red" onClick={() => removeImage(index)}>
-                Remove
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 type MapTabProps = {
   coordinates: { lat?: number | string; lng?: number | string };
   onChange: (coords: { lat?: number | string; lng?: number | string }) => void;
@@ -3248,25 +3134,5 @@ function MapTab({ coordinates, onChange, locationName }: MapTabProps) {
         className="w-full"
       />
     </div>
-  );
-}
-
-type AboutTabProps = {
-  about: string;
-  onChange: (value: string) => void;
-};
-
-function AboutTab({ about, onChange }: AboutTabProps) {
-  return (
-    <FormField
-      label="About Copy"
-      hint="Displayed on the location page. Support plain text and simple formatting."
-    >
-      <Textarea
-        value={about}
-        onChange={(event) => onChange(event.target.value)}
-        rows={7}
-      />
-    </FormField>
   );
 }

@@ -8,19 +8,22 @@ import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import { CalendarModal } from "@/components/location/CalendarModal";
 import { useFirebase } from "@/providers/FirebaseProvider";
 import useLocations from "@/hooks/useLocations";
+import type { LocationRecord } from "@/data/locationConfig";
 import type Firebase from "@/lib/firebase/client";
 
 type LocationSelectorProps = {
   className?: string;
 };
 
+const resolveStringValue = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim() ? value : fallback;
+
 export function LocationSelector({ className }: LocationSelectorProps) {
   const firebase = useFirebase();
   const { locations } = useLocations(firebase);
-  const [selectedLocation, setSelectedLocation] = useState<Record<
-    string,
-    any
-  > | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<LocationRecord | null>(
+    null,
+  );
 
   return (
     <>
@@ -41,8 +44,15 @@ export function LocationSelector({ className }: LocationSelectorProps) {
             as={Fragment}
           >
             <Menu.Items className="absolute left-0 z-40 mt-2 w-full min-w-[220px] rounded-2xl border border-white/10 bg-zinc-900/95 p-1 shadow-2xl shadow-black/40 backdrop-blur">
-              {locations.map((location) => (
-                <Menu.Item key={location.id}>
+              {locations.map((location, index) => {
+                const locationId = resolveStringValue(location?.id);
+                const locationName = resolveStringValue(
+                  location?.name,
+                  "Location",
+                );
+
+                return (
+                  <Menu.Item key={locationId || `${locationName}-${index}`}>
                   {({ active }) => (
                     <button
                       type="button"
@@ -52,11 +62,12 @@ export function LocationSelector({ className }: LocationSelectorProps) {
                         active ? "bg-primary/20 text-primary" : "bg-transparent",
                       )}
                     >
-                      {location.name}
+                      {locationName}
                     </button>
                   )}
-                </Menu.Item>
-              ))}
+                  </Menu.Item>
+                );
+              })}
             </Menu.Items>
           </Transition>
         </Menu>

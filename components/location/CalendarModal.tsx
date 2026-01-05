@@ -7,11 +7,14 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 type CalendarModalProps = {
-  location: Record<string, any> | null;
+  location: Record<string, unknown> | null;
   firebase: Firebase;
   onClose: () => void;
   show: boolean;
 };
+
+const resolveStringValue = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim() ? value : fallback;
 
 export function CalendarModal({
   location,
@@ -30,6 +33,9 @@ export function CalendarModal({
     return null;
   }
 
+  const locationName = resolveStringValue(location.name, "Location");
+  const locationAddress = resolveStringValue(location.address);
+
   return createPortal(
     <div className="fixed inset-0 z-[60]">
       <div className="fixed inset-0 bg-black/70" />
@@ -38,9 +44,9 @@ export function CalendarModal({
           <div className="relative w-full max-w-5xl overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/95 shadow-2xl shadow-black/60">
             <div className="flex items-start justify-between gap-4 border-b border-white/5 bg-zinc-950 px-6 py-5">
               <div className="space-y-1 text-white">
-                <h2 className="text-2xl">{location.name} Calendar</h2>
-                {location.address ? (
-                  <p className="text-sm text-white/60">{location.address}</p>
+                <h2 className="text-2xl">{locationName} Calendar</h2>
+                {locationAddress ? (
+                  <p className="text-sm text-white/60">{locationAddress}</p>
                 ) : null}
               </div>
 

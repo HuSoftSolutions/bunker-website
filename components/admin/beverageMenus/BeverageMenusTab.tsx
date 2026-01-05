@@ -272,10 +272,14 @@ export function BeverageMenusTab({
           {
             locationName: normalizedName,
             show: Boolean(showBeer),
-            beerList: beerList.map(({ id: _id, ...rest }) => ({
-              ...rest,
-              name: rest.name.trim(),
-            })),
+            beerList: beerList.map((item) => {
+              const { id: removed, ...rest } = item;
+              void removed;
+              return {
+                ...rest,
+                name: rest.name.trim(),
+              };
+            }),
           },
           { merge: true },
         ),
@@ -284,10 +288,14 @@ export function BeverageMenusTab({
           {
             locationName: normalizedName,
             show: Boolean(showCannedBeer),
-            cannedBeerList: cannedBeerList.map(({ id: _id, ...rest }) => ({
-              ...rest,
-              name: rest.name.trim(),
-            })),
+            cannedBeerList: cannedBeerList.map((item) => {
+              const { id: removed, ...rest } = item;
+              void removed;
+              return {
+                ...rest,
+                name: rest.name.trim(),
+              };
+            }),
           },
           { merge: true },
         ),
@@ -296,10 +304,14 @@ export function BeverageMenusTab({
           {
             locationName: normalizedName,
             show: Boolean(showWine),
-            wineList: wineList.map(({ id: _id, ...rest }) => ({
-              ...rest,
-              name: rest.name.trim(),
-            })),
+            wineList: wineList.map((item) => {
+              const { id: removed, ...rest } = item;
+              void removed;
+              return {
+                ...rest,
+                name: rest.name.trim(),
+              };
+            }),
           },
           { merge: true },
         ),
@@ -308,10 +320,14 @@ export function BeverageMenusTab({
           {
             locationName: normalizedName,
             show: Boolean(showSpecials),
-            specialsList: specialsList.map(({ id: _id, ...rest }) => ({
-              ...rest,
-              name: rest.name.trim(),
-            })),
+            specialsList: specialsList.map((item) => {
+              const { id: removed, ...rest } = item;
+              void removed;
+              return {
+                ...rest,
+                name: rest.name.trim(),
+              };
+            }),
           },
           { merge: true },
         ),

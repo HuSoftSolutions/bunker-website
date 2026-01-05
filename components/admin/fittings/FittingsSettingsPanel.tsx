@@ -85,11 +85,15 @@ export function FittingsSettingsPanel({ firebase }: FittingsSettingsPanelProps) 
 
         const feeItems = Array.isArray(data?.feeItems)
           ? data.feeItems
-              .map((item: any) => ({
-                id: createId("fee"),
-                title: typeof item?.title === "string" ? item.title : "",
-                description: typeof item?.description === "string" ? item.description : "",
-              }))
+              .map((item: unknown) => {
+                const record = item as Record<string, unknown>;
+                return {
+                  id: createId("fee"),
+                  title: typeof record?.title === "string" ? record.title : "",
+                  description:
+                    typeof record?.description === "string" ? record.description : "",
+                };
+              })
               .filter((item: FeeItemForm) => item.title.trim().length > 0)
           : cloneState(DEFAULT_STATE.feeItems);
 
@@ -352,4 +356,3 @@ export function FittingsSettingsPanel({ firebase }: FittingsSettingsPanelProps) 
     </div>
   );
 }
-

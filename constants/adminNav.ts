@@ -121,13 +121,6 @@ export const ADMIN_NAV_ITEMS = [
     tab: "fitting-inquiries",
   },
   {
-    href: `${LOCATION_ADMIN}?view=business&tab=event-inquiries`,
-    label: "Event Inquiries",
-    section: "Inquiries",
-    view: "business",
-    tab: "event-inquiries",
-  },
-  {
     href: `${LOCATION_ADMIN}?view=business&tab=inquiry-settings`,
     label: "Inquiry Settings",
     section: "Inquiries",

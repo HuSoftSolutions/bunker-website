@@ -8,6 +8,9 @@ import { useFirebase } from "@/providers/FirebaseProvider";
 
 const HTTPS_PROTOCOL = /^https?:\/\//i;
 
+const resolveStringValue = (value: unknown, fallback = "") =>
+  typeof value === "string" && value.trim() ? value : fallback;
+
 const sanitizeUrl = (value: string | null | undefined) => {
   if (!value) {
     return null;
@@ -34,13 +37,17 @@ export default function TeesheetPage() {
   const locationIdParam = searchParams.get("locationId");
   const locationNameParam = searchParams.get("locationName");
 
-  const fallbackUrl = sanitizeUrl(businessSettings?.teesheetUrl);
+  const fallbackUrl = sanitizeUrl(
+    resolveStringValue(businessSettings?.teesheetUrl),
+  );
   const embedUrl = requestedUrl ?? fallbackUrl;
 
   const activeLocation = useMemo(() => {
     if (locationIdParam) {
       return (
-        locations.find((location) => location?.id === locationIdParam) ?? null
+        locations.find(
+          (location) => resolveStringValue(location?.id) === locationIdParam,
+        ) ?? null
       );
     }
 
@@ -48,7 +55,7 @@ export default function TeesheetPage() {
       return (
         locations.find(
           (location) =>
-            typeof location?.url === "string" && location.url === requestedUrl,
+            resolveStringValue(location?.url) === requestedUrl,
         ) ?? null
       );
     }
@@ -56,10 +63,12 @@ export default function TeesheetPage() {
     return null;
   }, [locations, locationIdParam, requestedUrl]);
 
+  const activeLocationName = resolveStringValue(activeLocation?.name);
   const title =
     locationNameParam ??
-    activeLocation?.name ??
+    (activeLocationName || null) ??
     (embedUrl ? "The Bunker Teesheet" : "Book Your Bay");
+  const activeLocationAddress = resolveStringValue(activeLocation?.address);
 
   const showFallbackNotice = !embedUrl && !businessSettingsLoading;
 
@@ -77,9 +86,9 @@ export default function TeesheetPage() {
             <p className="mt-2 text-sm text-white/60">
               Reserve your time without leaving The Bunker experience.
             </p>
-            {activeLocation?.address ? (
+            {activeLocationAddress ? (
               <p className="mt-1 text-xs uppercase tracking-wide text-white/50">
-                {activeLocation.address}
+                {activeLocationAddress}
               </p>
             ) : null}
           </div>
