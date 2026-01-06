@@ -15,6 +15,7 @@ import {
   parseWorkflowFromData,
   type InquiryWorkflowStatus,
 } from "@/utils/inquiryWorkflow";
+import { resolveArchiveState } from "@/utils/inquiryArchive";
 
 export type LessonsInquiry = {
   inquiryId: string;
@@ -26,6 +27,8 @@ export type LessonsInquiry = {
   notes?: string | null;
   emailTo: string[];
   createdAtDate?: Date | null;
+  archivedAt?: string | null;
+  archivedAtDate?: Date | null;
   workflowStatus: InquiryWorkflowStatus;
   workflowAssignedTo: string;
 };
@@ -91,6 +94,7 @@ export function useLessonsInquiries(
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
           const workflow = parseWorkflowFromData(data);
+          const archive = resolveArchiveState(data.archivedAt);
 
           return {
             inquiryId: doc.id,
@@ -102,12 +106,14 @@ export function useLessonsInquiries(
             notes: typeof data.notes === "string" ? data.notes : null,
             emailTo: normalizeEmails(data.emailTo),
             createdAtDate,
+            archivedAt: archive.archivedAt,
+            archivedAtDate: archive.archivedAtDate,
             workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
             workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies LessonsInquiry;
         });
 
-        setRecords(inquiries);
+        setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
         setLoading(false);
       },
       (err: unknown) => {

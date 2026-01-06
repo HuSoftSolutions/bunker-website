@@ -15,6 +15,7 @@ import {
   parseWorkflowFromData,
   type InquiryWorkflowStatus,
 } from "@/utils/inquiryWorkflow";
+import { resolveArchiveState } from "@/utils/inquiryArchive";
 
 export type CareerInquiry = {
   inquiryId: string;
@@ -31,6 +32,8 @@ export type CareerInquiry = {
   resumeFileName?: string | null;
   resumeMimeType?: string | null;
   createdAtDate?: Date | null;
+  archivedAt?: string | null;
+  archivedAtDate?: Date | null;
   workflowStatus: InquiryWorkflowStatus;
   workflowAssignedTo: string;
 };
@@ -96,6 +99,7 @@ export function useCareerInquiries(
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
           const workflow = parseWorkflowFromData(data);
+          const archive = resolveArchiveState(data.archivedAt);
 
           return {
             inquiryId: doc.id,
@@ -114,12 +118,14 @@ export function useCareerInquiries(
             resumeMimeType:
               typeof data.resumeMimeType === "string" ? data.resumeMimeType : null,
             createdAtDate,
+            archivedAt: archive.archivedAt,
+            archivedAtDate: archive.archivedAtDate,
             workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
             workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies CareerInquiry;
         });
 
-        setRecords(inquiries);
+        setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
         setLoading(false);
       },
       (err: unknown) => {

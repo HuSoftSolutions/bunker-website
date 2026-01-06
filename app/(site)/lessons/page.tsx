@@ -9,115 +9,15 @@ import clsx from "clsx";
 import { PageHero } from "@/components/layout/PageHero";
 import { useFirebase } from "@/providers/FirebaseProvider";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
+import { useLessonsConfig } from "@/hooks/useLessonsConfig";
 import { addDoc, serverTimestamp } from "firebase/firestore";
 import { ErrorBox, Field, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
 
-type FeaturedPro = {
-  name: string;
-  role: string;
-  bio: string;
-  phone?: string;
-  email?: string;
-  image?: string;
-};
-
-const FEATURED_PROS: FeaturedPro[] = [
-  {
-    name: "Sean Madden",
-    role: "Director of Golf at The Bunker",
-    bio: "Sean is a graduate of the PGM program at Methodist University and has been a member of the PGA of America since 2007. His experience spans multiple leadership roles across the golf industry, including Director of Golf for all Bunker locations. Sean is passionate about teaching and helping players elevate their game at every level.",
-    phone: "838-280-0323",
-    email: "sean@getinthebunker.golf",
-    image: "/sean-headshot.png",
-  },
-  {
-    name: "Phil Kaminski",
-    role: "PGA Professional",
-    bio: "Phil has dedicated his career to coaching and growing the game. A Methodist University PGA PGM graduate, his certifications include The Gray Institute's NG 360 FPS system, Penn State Biomechanics, and golf's American Development Model. Phil focuses on building confidence through purposeful, data-backed instruction.",
-    email: "phil@getinthebunker.golf",
-  },
-];
-
-const ADDITIONAL_PROS = [
-  {
-    name: "Brandon Risler",
-    description:
-      "Brandon has 10+ years of experience in the golf industry, most recently at Saratoga Golf and Polo. He is working toward his PGA membership and serves as a lead fitter with TaylorMade, coaching players of every skill level.",
-  },
-  {
-    name: "Anthony Therrien",
-  },
-  {
-    name: "Kay McMahon",
-  },
-  {
-    name: "Angelo Cafaro",
-  },
-];
-
-const LESSON_RATES = [
-  {
-    title: "Individual",
-    details: ["One Hour: $125", "Half Hour: $65"],
-  },
-  {
-    title: "9 Hole Playing Lesson",
-    details: [
-      "$200 inside at any Bunker location or outdoors at Shaker Ridge Country Club or Olde Kinderhook Golf Club",
-    ],
-  },
-];
-
-const COACH_PROGRAMS = [
-  {
-    title: "Coach Program",
-    description:
-      "Our coaches will assess your game, define your goals, and build a step-by-step personalized plan for improvement. The program includes:",
-    sessions: [
-      "Pre-Lesson: Fill out and return the goal and self-assessment sheet to a Bunker coach.",
-      "Lesson 1: Assessment of long game, short game, and goals review. 1 hour.",
-      "Lesson 2: On-course evaluation, strategies, and mental/physical assessments. 2 ½ hours.",
-      "Lesson 3: Private lesson working on the personalized program. 1 hour.",
-      "Lesson 4: Continuation of private lessons. 1 hour.",
-    ],
-    cost: "Cost: $600 per student",
-  },
-  {
-    title: "Coach Group Program",
-    description:
-      "Coaches will work with students in a group setting to improve their games. Each group receives 12 hours of instruction with 4-6 golfers per group:",
-    sessions: [
-      "Session 1: On-course assessment of the students' games. 2 ½ hours.",
-      "Session 2: Group coaching on training protocols. 1 ½ hours.",
-      "Session 3: On-course coaching focused on strategy and mental/physical preparation. 2 ½ hours.",
-      "Session 4: Group coaching on training protocols. 1 ½ hours.",
-      "Session 5: On-course coaching that brings training to the course. 2 ½ hours.",
-      "Session 6: Final group coaching session on training protocols. 1 ½ hours.",
-    ],
-    cost: "Cost: $600 per student",
-  },
-];
-
-const TECHNOLOGY_LINKS = [
-  { label: "Trackman", href: "https://www.trackman.com/" },
-  { label: "Sportbox AI", href: "https://sportbox.ai/" },
-  { label: "Hackmotion", href: "https://hackmotion.com/" },
-];
-
-const LOCATIONS = [
-  "Clifton Park",
-  "Guilderland",
-  "New Hartford",
-  "North Greenbush",
-  "Saratoga",
-];
-
-const TIMES_OF_DAY = ["Morning", "Afternoon", "Evening"];
-
 export default function LessonsPage() {
   const firebase = useFirebase();
   const { settings } = useInquirySettings(firebase);
+  const { config } = useLessonsConfig(firebase);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -202,9 +102,9 @@ export default function LessonsPage() {
   return (
     <div className="flex flex-col">
       <PageHero
-        title="Lessons at The Bunker"
-        subtitle="With Our PGA Professionals"
-        description="Our coaching staff blends decades of experience, TrackMan technology, and hospitality-led service to help every golfer grow with confidence."
+        title={config.hero.title}
+        subtitle={config.hero.subtitle}
+        description={config.hero.description}
       />
 
       <section className="relative overflow-hidden bg-gradient-to-b from-black via-zinc-950 to-black py-20">
@@ -213,18 +113,18 @@ export default function LessonsPage() {
         <div className="relative mx-auto flex w-full max-w-5xl flex-col gap-16 px-4 text-white/80">
           <div className="space-y-4 text-center md:text-left">
             <p className="text-xs font-semibold uppercase tracking-[0.4em] text-primary/70">
-              Premium Coaching Experiences
+              {config.intro.eyebrow}
             </p>
             <h2 className="text-3xl font-black uppercase tracking-[0.25em] text-white">
-              Lessons at the Bunker
+              {config.intro.title}
             </h2>
             <p className="max-w-4xl text-sm md:text-base">
-              TrackMan-powered instruction, custom practice plans, and pros who know how to make learning fun. Explore our coaching roster and book time with the team that fits your game best.
+              {config.intro.description}
             </p>
           </div>
 
           <div className="space-y-8">
-            {FEATURED_PROS.map((pro) => (
+            {config.featuredPros.map((pro) => (
               <article
                 key={pro.name}
                 className="relative overflow-hidden rounded-[32px] border border-white/10 bg-white text-zinc-900 shadow-2xl transition hover:-translate-y-1 hover:shadow-primary/40"
@@ -282,15 +182,15 @@ export default function LessonsPage() {
           <div className="space-y-6 rounded-[32px] border border-white/10 bg-zinc-900/80 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.45)] md:p-10">
             <div className="space-y-3 text-center md:text-left">
               <h3 className="text-3xl font-black uppercase tracking-[0.3em] text-white">
-                Meet the Pros
+                {config.meetThePros.title}
               </h3>
               <p className="text-sm md:text-base">
-                From club fitting expertise to junior development specialists, The Bunker has coaches ready for every swing. Reach out to learn more about programming at your home location.
+                {config.meetThePros.description}
               </p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              {ADDITIONAL_PROS.map((pro) => (
+              {config.additionalPros.map((pro) => (
                 <div
                   key={pro.name}
                   className="group flex flex-col gap-3 rounded-3xl border border-white/5 bg-white/5 p-5 transition hover:border-primary/60 hover:bg-primary/10"
@@ -318,31 +218,32 @@ export default function LessonsPage() {
           <div className="flex flex-col gap-5 rounded-[32px] border border-primary/40 bg-primary/10 p-6 text-white md:flex-row md:items-center md:justify-between md:p-10">
             <div className="space-y-3 text-center md:text-left">
               <h3 className="text-2xl font-semibold uppercase tracking-[0.3em]">
-                Book Your Lesson
+                {config.cta.title}
               </h3>
               <p className="text-sm md:text-base text-white/80">
-                Reserve online to lock in time with our PGA professionals or connect with the team for custom packages.
+                {config.cta.description}
               </p>
             </div>
             <Link
               href="#lessons-contact-form"
               className="inline-flex items-center justify-center rounded-full bg-primary px-8 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-primary-dark"
             >
-              Reach{" "}
-              <span className="ml-2 block">Out</span>
+              {config.cta.buttonLabel}
             </Link>
           </div>
 
           <div className="space-y-10 rounded-[32px] border border-white/10 bg-zinc-900/70 p-6 text-white md:p-10">
             <div className="space-y-3 text-center">
-              <h3 className="text-3xl font-black uppercase tracking-[0.3em]">Rates</h3>
+              <h3 className="text-3xl font-black uppercase tracking-[0.3em]">
+                {config.rates.title}
+              </h3>
               <p className="text-sm text-white/70">
-                Transparent pricing for private instruction, on-course coaching, and multi-session programs.
+                {config.rates.description}
               </p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              {LESSON_RATES.map((rate) => (
+              {config.rates.items.map((rate) => (
                 <div
                   key={rate.title}
                   className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-black/80 p-6 text-center shadow-lg"
@@ -360,7 +261,7 @@ export default function LessonsPage() {
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              {COACH_PROGRAMS.map((program) => (
+              {config.coachPrograms.map((program) => (
                 <div
                   key={program.title}
                   className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-black/85 p-6 shadow-lg"
@@ -388,8 +289,11 @@ export default function LessonsPage() {
             {submitted ? (
               <div className="rounded-3xl border border-primary/30 bg-primary/10 px-6 py-8 text-primary">
                 <p className="text-xl font-semibold uppercase tracking-wide text-primary">
-                  Your inquiry has been sent to The Bunker!
+                  {config.form.successTitle}
                 </p>
+                {config.form.successMessage ? (
+                  <p className="mt-2 text-sm text-primary/80">{config.form.successMessage}</p>
+                ) : null}
               </div>
             ) : (
               <form
@@ -400,13 +304,13 @@ export default function LessonsPage() {
                 <FormCard>
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">
-                      Lessons
+                      {config.form.eyebrow}
                     </p>
                     <h2 className="text-2xl font-bold uppercase tracking-wide text-white">
-                      Interested in Lessons?
+                      {config.form.title}
                     </h2>
                     <p className="text-sm text-white/70">
-                      Fill out the form and a member of our coaching staff will reach out with availability and next steps.
+                      {config.form.description}
                     </p>
                   </div>
 
@@ -443,7 +347,7 @@ export default function LessonsPage() {
                         onChange={(event) => setLocation(event.target.value)}
                       >
                         <option value="">Select a Location</option>
-                        {LOCATIONS.map((loc) => (
+                        {config.selectOptions.locations.map((loc) => (
                           <option key={loc} value={loc}>
                             {loc}
                           </option>
@@ -457,7 +361,7 @@ export default function LessonsPage() {
                         onChange={(event) => setTimeOfDay(event.target.value)}
                       >
                         <option value="">Select a Time of Day</option>
-                        {TIMES_OF_DAY.map((time) => (
+                        {config.selectOptions.timesOfDay.map((time) => (
                           <option key={time} value={time}>
                             {time}
                           </option>
@@ -478,7 +382,8 @@ export default function LessonsPage() {
 
                   <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs text-white/50">
-                      Sent to: <span className="text-white/70">{recipients.join(", ")}</span>
+                      {config.form.sentToLabel}{" "}
+                      <span className="text-white/70">{recipients.join(", ")}</span>
                     </p>
                     <Button
                       type="submit"
@@ -487,7 +392,7 @@ export default function LessonsPage() {
                         submitting && "opacity-60 pointer-events-none",
                       )}
                     >
-                      {submitting ? "Submitting…" : "Submit"}
+                      {submitting ? "Submitting…" : config.form.submitLabel}
                     </Button>
                   </div>
                 </FormCard>
@@ -497,13 +402,13 @@ export default function LessonsPage() {
 
           <div className="space-y-6 rounded-[32px] border border-white/10 bg-black/80 p-6 text-center text-white md:p-10">
             <h3 className="text-2xl font-semibold uppercase tracking-[0.3em] text-primary">
-              Technology We Use
+              {config.technology.title}
             </h3>
             <p className="mx-auto max-w-3xl text-sm text-white/70">
-              Explore the cutting-edge tools that power our instruction and help you understand every swing.
+              {config.technology.description}
             </p>
             <div className="flex flex-wrap justify-center gap-6 text-sm font-semibold uppercase tracking-wide text-primary">
-              {TECHNOLOGY_LINKS.map((tool) => (
+              {config.technology.links.map((tool) => (
                 <Link
                   key={tool.label}
                   href={tool.href}

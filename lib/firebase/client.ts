@@ -217,6 +217,8 @@ class Firebase {
 
   noticeInfoRef = () => doc(this.db, "noticeInfo/config");
 
+  lessonsConfigRef = () => doc(this.db, "configs/lessons");
+
   fittingsConfigRef = () => doc(this.db, "configs/fittings");
 
   fittingsInquiriesRef = () =>

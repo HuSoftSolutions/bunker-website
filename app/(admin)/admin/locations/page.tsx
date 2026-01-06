@@ -24,6 +24,7 @@ import { MembershipInquiriesPanel } from "@/components/admin/inquiries/Membershi
 import { LocationMap } from "@/components/maps/LocationMap";
 import { JuniorGolfSettingsPanel } from "@/components/admin/juniorGolf/JuniorGolfSettingsPanel";
 import { FittingsSettingsPanel } from "@/components/admin/fittings/FittingsSettingsPanel";
+import { LessonsSettingsPanel } from "@/components/admin/lessons/LessonsSettingsPanel";
 import { BeverageMenusTab } from "@/components/admin/beverageMenus/BeverageMenusTab";
 import {
 	FALLBACK_LOCATIONS,
@@ -94,6 +95,7 @@ type BusinessTab =
   | "membership-inquiries"
   | "fitting-inquiries"
   | "fittings"
+  | "lessons"
   | "junior-golf"
   | "inquiry-settings";
 
@@ -1041,6 +1043,7 @@ export default function LocationsAdminPage() {
       "membership-inquiries",
       "fitting-inquiries",
       "fittings",
+      "lessons",
       "junior-golf",
       "inquiry-settings",
     ];
@@ -1201,6 +1204,10 @@ export default function LocationsAdminPage() {
 
           {businessTab === "fittings" ? (
             <FittingsSettingsPanel firebase={firebase} />
+          ) : null}
+
+          {businessTab === "lessons" ? (
+            <LessonsSettingsPanel firebase={firebase} />
           ) : null}
 
           {businessTab === "junior-golf" ? (

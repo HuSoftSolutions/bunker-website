@@ -15,6 +15,7 @@ import {
   parseWorkflowFromData,
   type InquiryWorkflowStatus,
 } from "@/utils/inquiryWorkflow";
+import { resolveArchiveState } from "@/utils/inquiryArchive";
 
 export type EventsInquiry = {
   inquiryId: string;
@@ -35,6 +36,8 @@ export type EventsInquiry = {
   heardAbout: string;
   emailTo: string[];
   createdAtDate?: Date | null;
+  archivedAt?: string | null;
+  archivedAtDate?: Date | null;
   workflowStatus: InquiryWorkflowStatus;
   workflowAssignedTo: string;
 };
@@ -100,6 +103,7 @@ export function useEventsInquiries(
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
           const workflow = parseWorkflowFromData(data);
+          const archive = resolveArchiveState(data.archivedAt);
 
           return {
             inquiryId: doc.id,
@@ -124,12 +128,14 @@ export function useEventsInquiries(
             heardAbout: (data.heardAbout as string) ?? "",
             emailTo: normalizeEmails(data.emailTo),
             createdAtDate,
+            archivedAt: archive.archivedAt,
+            archivedAtDate: archive.archivedAtDate,
             workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
             workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies EventsInquiry;
         });
 
-        setRecords(inquiries);
+        setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
         setLoading(false);
       },
       (err: unknown) => {

@@ -132,6 +132,30 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+    const root = document.documentElement;
+    const hadDark = root.classList.contains("dark");
+    const hadLight = root.classList.contains("light");
+    const previousScheme = root.style.colorScheme;
+
+    root.classList.add("dark");
+    root.classList.remove("light");
+    root.style.colorScheme = "dark";
+
+    return () => {
+      if (!hadDark) {
+        root.classList.remove("dark");
+      }
+      if (hadLight) {
+        root.classList.add("light");
+      }
+      root.style.colorScheme = previousScheme;
+    };
+  }, []);
+
   const condition = useMemo(
     () => (authUser: Record<string, unknown> | null) => hasAdminRole(authUser),
     [],

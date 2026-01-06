@@ -72,6 +72,13 @@ export const ADMIN_NAV_ITEMS = [
     tab: "fittings",
   },
   {
+    href: `${LOCATION_ADMIN}?view=business&tab=lessons`,
+    label: "Lessons",
+    section: "Business",
+    view: "business",
+    tab: "lessons",
+  },
+  {
     href: `${LOCATION_ADMIN}?view=business&tab=junior-golf`,
     label: "Junior Golf",
     section: "Business",

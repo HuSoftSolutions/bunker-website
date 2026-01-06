@@ -15,6 +15,7 @@ import {
   parseWorkflowFromData,
   type InquiryWorkflowStatus,
 } from "@/utils/inquiryWorkflow";
+import { resolveArchiveState } from "@/utils/inquiryArchive";
 
 export type FittingsInquiry = {
   inquiryId: string;
@@ -27,6 +28,8 @@ export type FittingsInquiry = {
   notes?: string | null;
   emailTo: string[];
   createdAtDate?: Date | null;
+  archivedAt?: string | null;
+  archivedAtDate?: Date | null;
   workflowStatus: InquiryWorkflowStatus;
   workflowAssignedTo: string;
 };
@@ -90,6 +93,7 @@ export function useFittingsInquiries(
             timestampToDate(data.createdAt) ??
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
           const workflow = parseWorkflowFromData(data);
+          const archive = resolveArchiveState(data.archivedAt);
 
           return {
             inquiryId: doc.id,
@@ -102,12 +106,14 @@ export function useFittingsInquiries(
             notes: typeof data.notes === "string" ? data.notes : null,
             emailTo: normalizeEmails(data.emailTo),
             createdAtDate,
+            archivedAt: archive.archivedAt,
+            archivedAtDate: archive.archivedAtDate,
             workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
             workflowAssignedTo: workflow.assignedTo ?? "",
           } satisfies FittingsInquiry;
         });
 
-        setRecords(inquiries);
+        setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
         setLoading(false);
       },
       (err: unknown) => {

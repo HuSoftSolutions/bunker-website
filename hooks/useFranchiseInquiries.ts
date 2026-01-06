@@ -14,6 +14,7 @@ import {
   type InquiryWorkflowStatus,
   parseWorkflowFromData,
 } from "@/utils/inquiryWorkflow";
+import { resolveArchiveState } from "@/utils/inquiryArchive";
 
 export type FranchiseInquiry = {
   inquiryId: string;
@@ -30,6 +31,8 @@ export type FranchiseInquiry = {
   submittedAtDate?: Date | null;
   createdAtDate?: Date | null;
   franchiseSite?: string | null;
+  archivedAt?: string | null;
+  archivedAtDate?: Date | null;
   workflowStatus: InquiryWorkflowStatus;
   workflowAssignedTo: string;
 };
@@ -85,11 +88,12 @@ export function useFranchiseInquiries(
                 ? createTime.toDate()
                 : null;
 
-            const workflow = parseWorkflowFromData(data);
+          const workflow = parseWorkflowFromData(data);
+          const archive = resolveArchiveState(data.archivedAt);
 
-            return {
-              inquiryId: (data?.inquiryId as string) ?? doc.id,
-              firstName: (data?.firstName as string) ?? "",
+          return {
+            inquiryId: (data?.inquiryId as string) ?? doc.id,
+            firstName: (data?.firstName as string) ?? "",
               lastName: (data?.lastName as string) ?? "",
               email: (data?.email as string) ?? "",
               phone: (data?.phone as string) ?? "",
@@ -108,16 +112,18 @@ export function useFranchiseInquiries(
               submittedAt: submittedAtRaw,
               submittedAtDate,
               createdAtDate,
-              franchiseSite:
-                typeof data?.franchiseSite === "string"
-                  ? data.franchiseSite
-                  : null,
-              workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
-              workflowAssignedTo: workflow.assignedTo ?? "",
-            } satisfies FranchiseInquiry;
-          });
+            franchiseSite:
+              typeof data?.franchiseSite === "string"
+                ? data.franchiseSite
+                : null,
+            archivedAt: archive.archivedAt,
+            archivedAtDate: archive.archivedAtDate,
+            workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
+            workflowAssignedTo: workflow.assignedTo ?? "",
+          } satisfies FranchiseInquiry;
+        });
 
-          setRecords(inquiries);
+          setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
           setLoading(false);
         },
         (err: unknown) => {

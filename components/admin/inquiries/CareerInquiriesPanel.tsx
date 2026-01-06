@@ -56,6 +56,7 @@ type InquiryDrawerProps = {
   inquiry: CareerInquiry | null;
   onClose: () => void;
   onMarkRead: (inquiryId: string) => void;
+  onArchive: (inquiryId: string) => void;
   isUnread: boolean;
   workflowState: Record<string, InquiryWorkflowEntry>;
   onStatusChange: (inquiryId: string, status: InquiryWorkflowStatus) => void;
@@ -78,6 +79,7 @@ function InquiryDrawer({
   inquiry,
   onClose,
   onMarkRead,
+  onArchive,
   isUnread,
   workflowState,
   onStatusChange,
@@ -119,6 +121,13 @@ function InquiryDrawer({
                 Mark Read
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={() => onArchive(inquiry.inquiryId)}
+              className="rounded-full border border-red-500/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:bg-red-500/10"
+            >
+              Archive
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -488,6 +497,24 @@ export function CareerInquiriesPanel({ firebase }: CareerInquiriesPanelProps) {
     [updateWorkflow],
   );
 
+  const handleArchiveInquiry = useCallback(
+    async (inquiryId: string) => {
+      if (!window.confirm("Archive this inquiry? It will be removed from the active lists.")) {
+        return;
+      }
+      try {
+        await updateDoc(
+          doc(firebase.careerInquiriesRef(), inquiryId),
+          { archivedAt: new Date().toISOString() },
+        );
+        setSelectedInquiryId(null);
+      } catch (error) {
+        console.error("[CareerInquiries] failed to archive", error);
+      }
+    },
+    [firebase],
+  );
+
   return (
     <div className="space-y-6">
       <section className="rounded-3xl border border-white/10 bg-zinc-950 shadow-xl shadow-black/40">
@@ -670,6 +697,7 @@ export function CareerInquiriesPanel({ firebase }: CareerInquiriesPanelProps) {
         inquiry={selectedInquiry}
         onClose={() => setSelectedInquiryId(null)}
         onMarkRead={handleMarkInquiryRead}
+        onArchive={handleArchiveInquiry}
         isUnread={selectedInquiry ? unreadInquiryIds.has(selectedInquiry.inquiryId) : false}
         workflowState={workflowState}
         onStatusChange={handleStatusChange}
