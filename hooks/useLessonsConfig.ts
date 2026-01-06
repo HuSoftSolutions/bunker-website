@@ -64,6 +64,8 @@ const normalizeRate = (value: unknown): LessonsRate | null => {
   return { title, details };
 };
 
+const isRate = (value: LessonsRate | null): value is LessonsRate => value !== null;
+
 const normalizeProgram = (value: unknown): LessonsCoachProgram | null => {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -88,6 +90,9 @@ const normalizeTechLink = (value: unknown): LessonsTechnologyLink | null => {
   if (!label || !href) return null;
   return { label, href };
 };
+
+const isTechLink = (value: LessonsTechnologyLink | null): value is LessonsTechnologyLink =>
+  value !== null;
 
 export function useLessonsConfig(firebase: Firebase | null) {
   const [config, setConfig] = useState<LessonsContent>(LEGACY_LESSONS_CONTENT);
@@ -154,7 +159,7 @@ export function useLessonsConfig(firebase: Firebase | null) {
             asString(data.ratesDescription).trim() ||
             LEGACY_LESSONS_CONTENT.rates.description,
           items: Array.isArray(data.rates)
-            ? data.rates.map(normalizeRate).filter(Boolean)
+            ? data.rates.map(normalizeRate).filter(isRate)
             : [],
         };
 
@@ -190,7 +195,7 @@ export function useLessonsConfig(firebase: Firebase | null) {
             asString(data.technologyDescription).trim() ||
             LEGACY_LESSONS_CONTENT.technology.description,
           links: Array.isArray(data.technologyLinks)
-            ? data.technologyLinks.map(normalizeTechLink).filter(Boolean)
+            ? data.technologyLinks.map(normalizeTechLink).filter(isTechLink)
             : [],
         };
 
