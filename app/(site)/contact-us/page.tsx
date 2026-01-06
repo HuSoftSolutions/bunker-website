@@ -2,7 +2,7 @@ import { PageHero } from "@/components/layout/PageHero";
 import { ExternalLinkButton } from "@/components/buttons/ExternalLinkButton";
 
 const CONTACT_EMAIL = "info@getinthebunker.golf";
-const PRESS_EMAIL = "press@getinthebunker.golf";
+const PRESS_EMAIL = "emily@getinthebunker.golf";
 
 export default function ContactPage() {
   return (
