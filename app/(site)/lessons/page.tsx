@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { FiMail, FiPhone } from "react-icons/fi";
@@ -11,7 +11,8 @@ import { useFirebase } from "@/providers/FirebaseProvider";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
 import { useLessonsConfig } from "@/hooks/useLessonsConfig";
 import { addDoc, serverTimestamp } from "firebase/firestore";
-import { ErrorBox, Field, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
+import { toast } from "react-toastify";
+import { Field, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
 
 export default function LessonsPage() {
@@ -26,8 +27,7 @@ export default function LessonsPage() {
   const [timeOfDay, setTimeOfDay] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const submitGuardRef = useRef(false);
 
   const recipients = useMemo(
     () => settings.lessonsDefaultRecipients,
@@ -39,13 +39,16 @@ export default function LessonsPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitGuardRef.current) {
+      return;
+    }
     if (formIsInvalid) {
-      setErrorMessage("Please fill out all required fields.");
+      toast.error("Please fill out all required fields.");
       return;
     }
 
+    submitGuardRef.current = true;
     setSubmitting(true);
-    setErrorMessage("");
 
     try {
       const docRef = await addDoc(firebase.lessonsInquiriesRef(), {
@@ -81,20 +84,20 @@ export default function LessonsPage() {
         }
       }
 
-      setSubmitted(true);
       setName("");
       setPhone("");
       setEmail("");
       setLocation("");
       setTimeOfDay("");
       setNotes("");
-      setErrorMessage("");
+      toast.success(config.form.successTitle);
     } catch (error) {
       console.error("[LessonsPage] inquiry submit failed", error);
-      setErrorMessage(
+      toast.error(
         error instanceof Error ? error.message : "Something went wrong. Please try again.",
       );
     } finally {
+      submitGuardRef.current = false;
       setSubmitting(false);
     }
   };
@@ -286,118 +289,106 @@ export default function LessonsPage() {
           </div>
 
           <div className="space-y-8">
-            {submitted ? (
-              <div className="rounded-3xl border border-primary/30 bg-primary/10 px-6 py-8 text-primary">
-                <p className="text-xl font-semibold uppercase tracking-wide text-primary">
-                  {config.form.successTitle}
-                </p>
-                {config.form.successMessage ? (
-                  <p className="mt-2 text-sm text-primary/80">{config.form.successMessage}</p>
-                ) : null}
-              </div>
-            ) : (
-              <form
-                id="lessons-contact-form"
-                onSubmit={handleSubmit}
-                className="w-full"
-              >
-                <FormCard>
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">
-                      {config.form.eyebrow}
-                    </p>
-                    <h2 className="text-2xl font-bold uppercase tracking-wide text-white">
-                      {config.form.title}
-                    </h2>
-                    <p className="text-sm text-white/70">
-                      {config.form.description}
-                    </p>
-                  </div>
+            <form
+              id="lessons-contact-form"
+              onSubmit={handleSubmit}
+              className="w-full"
+            >
+              <FormCard>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">
+                    {config.form.eyebrow}
+                  </p>
+                  <h2 className="text-2xl font-bold uppercase tracking-wide text-white">
+                    {config.form.title}
+                  </h2>
+                  <p className="text-sm text-white/70">
+                    {config.form.description}
+                  </p>
+                </div>
 
-                  <div className="mt-6 grid gap-4 md:grid-cols-2">
-                    <Field label="Name" required>
-                      <TextInput
-                        type="text"
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        required
-                      />
-                    </Field>
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <Field label="Name" required>
+                    <TextInput
+                      type="text"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      required
+                    />
+                  </Field>
 
-                    <Field label="Phone">
-                      <TextInput
-                        type="tel"
-                        value={phone}
-                        onChange={(event) => setPhone(event.target.value)}
-                      />
-                    </Field>
+                  <Field label="Phone">
+                    <TextInput
+                      type="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                    />
+                  </Field>
 
-                    <Field label="Email" required>
-                      <TextInput
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        required
-                      />
-                    </Field>
+                  <Field label="Email" required>
+                    <TextInput
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      required
+                    />
+                  </Field>
 
-                    <Field label="Location">
-                      <Select
-                        value={location}
-                        onChange={(event) => setLocation(event.target.value)}
-                      >
-                        <option value="">Select a Location</option>
-                        {config.selectOptions.locations.map((loc) => (
-                          <option key={loc} value={loc}>
-                            {loc}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-
-                    <Field label="Time of Day">
-                      <Select
-                        value={timeOfDay}
-                        onChange={(event) => setTimeOfDay(event.target.value)}
-                      >
-                        <option value="">Select a Time of Day</option>
-                        {config.selectOptions.timesOfDay.map((time) => (
-                          <option key={time} value={time}>
-                            {time}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-
-                    <Field label="Additional Notes" className="md:col-span-2">
-                      <Textarea
-                        rows={4}
-                        value={notes}
-                        onChange={(event) => setNotes(event.target.value)}
-                      />
-                    </Field>
-                  </div>
-
-                  {errorMessage ? <ErrorBox className="mt-4">{errorMessage}</ErrorBox> : null}
-
-                  <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-xs text-white/50">
-                      {config.form.sentToLabel}{" "}
-                      <span className="text-white/70">{recipients.join(", ")}</span>
-                    </p>
-                    <Button
-                      type="submit"
-                      className={clsx(
-                        "w-full sm:w-auto",
-                        submitting && "opacity-60 pointer-events-none",
-                      )}
+                  <Field label="Location">
+                    <Select
+                      value={location}
+                      onChange={(event) => setLocation(event.target.value)}
                     >
-                      {submitting ? "Submitting…" : config.form.submitLabel}
-                    </Button>
-                  </div>
-                </FormCard>
-              </form>
-            )}
+                      <option value="">Select a Location</option>
+                      {config.selectOptions.locations.map((loc) => (
+                        <option key={loc} value={loc}>
+                          {loc}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+
+                  <Field label="Time of Day">
+                    <Select
+                      value={timeOfDay}
+                      onChange={(event) => setTimeOfDay(event.target.value)}
+                    >
+                      <option value="">Select a Time of Day</option>
+                      {config.selectOptions.timesOfDay.map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+
+                  <Field label="Additional Notes" className="md:col-span-2">
+                    <Textarea
+                      rows={4}
+                      value={notes}
+                      onChange={(event) => setNotes(event.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-white/50">
+                    {config.form.sentToLabel}{" "}
+                    <span className="text-white/70">{recipients.join(", ")}</span>
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={submitting}
+                    className={clsx(
+                      "w-full sm:w-auto",
+                      submitting && "opacity-60 pointer-events-none",
+                    )}
+                  >
+                    {submitting ? "Submitting…" : config.form.submitLabel}
+                  </Button>
+                </div>
+              </FormCard>
+            </form>
           </div>
 
           <div className="space-y-6 rounded-[32px] border border-white/10 bg-black/80 p-6 text-center text-white md:p-10">

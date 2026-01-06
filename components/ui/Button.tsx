@@ -12,6 +12,7 @@ type ButtonProps = {
   rel?: string;
   onClick?: () => void;
   type?: "button" | "submit" | "reset";
+  disabled?: boolean;
 };
 
 const baseClasses =
@@ -38,6 +39,7 @@ export function Button({
   rel,
   onClick,
   type = "button",
+  disabled = false,
 }: ButtonProps) {
   const classes = clsx(baseClasses, variantClasses[variant], className);
 
@@ -48,7 +50,8 @@ export function Button({
         className={classes}
         target={target}
         rel={rel}
-        onClick={onClick}
+        onClick={disabled ? undefined : onClick}
+        aria-disabled={disabled || undefined}
       >
         {children}
       </Link>
@@ -56,7 +59,7 @@ export function Button({
   }
 
   return (
-    <button type={type} className={classes} onClick={onClick}>
+    <button type={type} className={classes} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   );

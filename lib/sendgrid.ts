@@ -25,16 +25,12 @@ export type SendGridSendOptions = {
   replyTo?: string;
 };
 
-function requireEnv(name: string) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
-}
-
 export async function sendWithSendGrid(options: SendGridSendOptions) {
-  const apiKey = requireEnv("SENDGRID_API_KEY");
+  const apiKey = process.env.SENDGRID_API_KEY;
+  if (!apiKey) {
+    console.warn("[sendgrid] Missing SENDGRID_API_KEY; skipping email send.");
+    return;
+  }
   const fromEmail = process.env.SENDGRID_FROM_EMAIL ?? "no-reply@getinthebunker.golf";
 
   const payload: SendGridMailSendPayload = {
@@ -69,4 +65,3 @@ export async function sendWithSendGrid(options: SendGridSendOptions) {
     throw new Error(`SendGrid error (${response.status}): ${body}`.slice(0, 1000));
   }
 }
-

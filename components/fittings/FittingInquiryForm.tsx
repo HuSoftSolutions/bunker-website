@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { addDoc, serverTimestamp } from "firebase/firestore";
+import { toast } from "react-toastify";
 import type Firebase from "@/lib/firebase/client";
 import { Button } from "@/components/ui/Button";
-import { ErrorBox, Field, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
+import { Field, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
 import type { FittingsConfig } from "@/hooks/useFittingsConfig";
 
@@ -39,8 +40,7 @@ export function FittingInquiryForm({ firebase, config, className }: FittingInqui
   const [notes, setNotes] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const submitGuardRef = useRef(false);
 
   const formIsInvalid =
     !name.trim() ||
@@ -58,18 +58,20 @@ export function FittingInquiryForm({ firebase, config, className }: FittingInqui
     setLocationPreference("");
     setTimePreference("");
     setNotes("");
-    setErrorMessage("");
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (submitGuardRef.current) {
+      return;
+    }
     if (formIsInvalid) {
-      setErrorMessage("Please fill out all required fields.");
+      toast.error("Please fill out all required fields.");
       return;
     }
 
+    submitGuardRef.current = true;
     setSubmitting(true);
-    setErrorMessage("");
 
     try {
       const payload = {
@@ -99,27 +101,18 @@ export function FittingInquiryForm({ firebase, config, className }: FittingInqui
         }
       }
 
-      setSubmitted(true);
       resetForm();
+      toast.success("Your inquiry has been sent to The Bunker!");
     } catch (error) {
       console.error("[FittingInquiryForm] submit failed", error);
-      setErrorMessage(
+      toast.error(
         error instanceof Error ? error.message : "Something went wrong. Please try again.",
       );
     } finally {
+      submitGuardRef.current = false;
       setSubmitting(false);
     }
   };
-
-  if (submitted) {
-    return (
-      <div className={clsx("rounded-3xl border border-primary/30 bg-primary/10 px-6 py-8", className)}>
-        <p className="text-xl font-semibold uppercase tracking-wide text-primary">
-          Your inquiry has been sent to The Bunker!
-        </p>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className={className}>
@@ -218,14 +211,13 @@ export function FittingInquiryForm({ firebase, config, className }: FittingInqui
           </Field>
         </div>
 
-        {errorMessage ? <ErrorBox className="mt-4">{errorMessage}</ErrorBox> : null}
-
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-white/50">
             Sent to: <span className="text-white/70">{recipients.join(", ")}</span>
           </p>
           <Button
             type="submit"
+            disabled={submitting}
             className={clsx(
               "w-full sm:w-auto",
               submitting && "opacity-60 pointer-events-none",

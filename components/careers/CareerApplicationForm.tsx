@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { addDoc, serverTimestamp } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
+import { toast } from "react-toastify";
 import type Firebase from "@/lib/firebase/client";
 import useLocations from "@/hooks/useLocations";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
 import { Button } from "@/components/ui/Button";
-import { ErrorBox, Field, FileInput, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
+import { Field, FileInput, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
 
 type CareerApplicationFormProps = {
   firebase: Firebase;
@@ -85,10 +86,8 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
   const [skillLevel, setSkillLevel] = useState("");
   const [message, setMessage] = useState("");
   const [resume, setResume] = useState<File | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const submitGuardRef = useRef(false);
 
   const selectedLocationLabel = useMemo(() => {
     if (!locationId) {
@@ -123,18 +122,16 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
     const file = event.target.files?.[0] ?? null;
     if (!file) {
       setResume(null);
-      setErrorMessage("");
       return;
     }
 
     if (!isAllowedResumeType(file.type)) {
       setResume(null);
-      setErrorMessage("Only PDF and .docx files are allowed");
+      toast.error("Only PDF and .docx files are allowed");
       return;
     }
 
     setResume(file);
-    setErrorMessage("");
   };
 
   const resetForm = () => {
@@ -147,18 +144,21 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
     setPosition("");
     setSkillLevel("");
     setResume(null);
-    setErrorMessage("");
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (formIsInvalid) {
-      setErrorMessage("Please fill out all required fields.");
+    if (submitGuardRef.current) {
       return;
     }
 
+    if (formIsInvalid) {
+      toast.error("Please fill out all required fields.");
+      return;
+    }
+
+    submitGuardRef.current = true;
     setSubmitting(true);
-    setErrorMessage("");
 
     try {
       let resumeMeta: ResumeMeta | null = null;
@@ -210,8 +210,8 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
         }
       }
 
-      setSubmitted(true);
       resetForm();
+      toast.success("Your inquiry has been sent to The Bunker!");
     } catch (error) {
       console.error("[CareerApplicationForm] submit failed", error);
       const message = (() => {
@@ -224,48 +224,18 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
         return "Something went wrong. Please try again.";
       })();
 
-      setErrorMessage(message);
-      setToastMessage(message);
+      toast.error(message);
     } finally {
+      submitGuardRef.current = false;
       setSubmitting(false);
     }
   };
-
-  if (submitted) {
-    return (
-      <div className={clsx("rounded-3xl border border-primary/30 bg-primary/10 px-6 py-8", className)}>
-        <p className="text-xl font-semibold uppercase tracking-wide text-primary">
-          Your inquiry has been sent to The Bunker!
-        </p>
-      </div>
-    );
-  }
 
   return (
     <form
       onSubmit={handleSubmit}
       className={className}
     >
-      {toastMessage ? (
-        <div className="fixed right-4 top-4 z-50 w-full max-w-sm rounded-2xl border border-rose-500/40 bg-zinc-950 px-4 py-3 text-sm text-rose-50 shadow-2xl shadow-black/50">
-          <div className="flex items-start gap-3">
-            <span className="mt-1 inline-flex h-2 w-2 rounded-full bg-rose-300" />
-            <div className="flex-1">
-              <p className="font-semibold uppercase tracking-wide text-rose-100">
-                Request Failed
-              </p>
-              <p className="mt-1 text-rose-100/80">{toastMessage}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setToastMessage(null)}
-              className="text-xs uppercase tracking-wide text-rose-100/70 transition hover:text-white"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      ) : null}
       <FormCard>
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">
@@ -372,14 +342,13 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
           </Field>
         </div>
 
-        {errorMessage ? <ErrorBox className="mt-4">{errorMessage}</ErrorBox> : null}
-
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-white/50">
             Sent to: <span className="text-white/70">{resolvedRecipients.join(", ")}</span>
           </p>
           <Button
             type="submit"
+            disabled={submitting}
             className={clsx(
               "w-full sm:w-auto",
               submitting && "opacity-60 pointer-events-none",

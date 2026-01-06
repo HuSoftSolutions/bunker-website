@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { addDoc, serverTimestamp } from "firebase/firestore";
+import { toast } from "react-toastify";
 import type Firebase from "@/lib/firebase/client";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
 import { Button } from "@/components/ui/Button";
-import { ErrorBox, Field, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
+import { Field, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
 
 type EventsInquiryFormProps = {
   firebase: Firebase;
@@ -71,8 +72,7 @@ export function EventsInquiryForm({ firebase, className }: EventsInquiryFormProp
   const [heardAbout, setHeardAbout] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const submitGuardRef = useRef(false);
 
   const validators = useMemo(() => {
     const errors: string[] = [];
@@ -147,19 +147,21 @@ export function EventsInquiryForm({ firebase, className }: EventsInquiryFormProp
     setHeadcount("");
     setAdditionalInfo("");
     setHeardAbout("");
-    setErrorMessage("");
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
-    if (validators.isInvalid) {
-      setErrorMessage(validators.errors[0] ?? "Please fill out all required fields.");
+    if (submitGuardRef.current) {
       return;
     }
 
+    if (validators.isInvalid) {
+      toast.error(validators.errors[0] ?? "Please fill out all required fields.");
+      return;
+    }
+
+    submitGuardRef.current = true;
     setSubmitting(true);
-    setErrorMessage("");
 
     try {
       const payload = {
@@ -197,27 +199,18 @@ export function EventsInquiryForm({ firebase, className }: EventsInquiryFormProp
         }
       }
 
-      setSubmitted(true);
       resetForm();
+      toast.success("Your event inquiry has been sent to The Bunker!");
     } catch (error) {
       console.error("[EventsInquiryForm] submit failed", error);
-      setErrorMessage(
+      toast.error(
         error instanceof Error ? error.message : "Something went wrong. Please try again.",
       );
     } finally {
+      submitGuardRef.current = false;
       setSubmitting(false);
     }
   };
-
-  if (submitted) {
-    return (
-      <div className={clsx("rounded-3xl border border-primary/30 bg-primary/10 px-6 py-8", className)}>
-        <p className="text-xl font-semibold uppercase tracking-wide text-primary">
-          Your event inquiry has been sent to The Bunker!
-        </p>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className={className}>
@@ -382,13 +375,10 @@ export function EventsInquiryForm({ firebase, className }: EventsInquiryFormProp
           </Field>
         </div>
 
-        {errorMessage ? (
-          <ErrorBox className="mt-6">{errorMessage}</ErrorBox>
-        ) : null}
-
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
             type="submit"
+            disabled={submitting}
             className={clsx(
               "w-full sm:w-auto",
               submitting && "opacity-60 pointer-events-none",

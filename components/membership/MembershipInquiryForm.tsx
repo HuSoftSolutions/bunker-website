@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { addDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "react-toastify";
@@ -66,7 +66,7 @@ export function MembershipInquiryForm({
   const [notes, setNotes] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const submitGuardRef = useRef(false);
 
   const validators = useMemo(() => {
     const errors: string[] = [];
@@ -106,12 +106,16 @@ export function MembershipInquiryForm({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (submitGuardRef.current) {
+      return;
+    }
 
     if (validators.isInvalid) {
       toast.error(validators.errors[0] ?? "Please fill out all required fields.");
       return;
     }
 
+    submitGuardRef.current = true;
     setSubmitting(true);
 
     try {
@@ -152,35 +156,18 @@ export function MembershipInquiryForm({
         }
       }
 
-      setSubmitted(true);
       resetForm();
+      toast.success(content.successTitle);
     } catch (error) {
       console.error("[MembershipInquiryForm] submit failed", error);
       toast.error(
         error instanceof Error ? error.message : "Something went wrong. Please try again.",
       );
     } finally {
+      submitGuardRef.current = false;
       setSubmitting(false);
     }
   };
-
-  if (submitted) {
-    return (
-      <div className={clsx("rounded-3xl border border-primary/30 bg-primary/10 px-6 py-8", className)}>
-        <p className="text-xl font-semibold uppercase tracking-wide text-primary">
-          {content.successTitle}
-        </p>
-        <p className="mt-3 text-sm text-white/80">{content.successMessage}</p>
-        {paymentLinkUrl ? (
-          <div className="mt-6">
-            <Button href={paymentLinkUrl} target="_blank" rel="noopener noreferrer">
-              {content.paymentLinkLabel}
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className={className}>
@@ -325,6 +312,7 @@ export function MembershipInquiryForm({
           </p>
           <Button
             type="submit"
+            disabled={submitting}
             className={clsx(
               "w-full sm:w-auto",
               submitting && "opacity-60 pointer-events-none",
