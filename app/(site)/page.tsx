@@ -159,7 +159,7 @@ export default function LandingPage() {
         </video>
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
         <div className="relative mx-auto flex min-h-[70vh] w-full max-w-6xl flex-col items-center justify-center gap-6 px-4 py-20 text-center md:gap-8">
-          <h1 className="text-4xl font-black uppercase tracking-[0.2em] text-white drop-shadow md:text-5xl">
+          <h1 className="text-4xl font-bold uppercase tracking-[0.2em] text-white drop-shadow md:text-5xl font-sans">
             Get in the Bunker!
           </h1>
           <p className="max-w-3xl text-sm font-semibold uppercase tracking-[0.35em] text-white/80 md:text-base">

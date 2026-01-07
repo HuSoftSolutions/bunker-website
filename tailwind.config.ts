@@ -30,7 +30,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-aller)", "system-ui", "sans-serif"],
-        display: ["var(--font-aller-display)", "var(--font-aller)", "system-ui", "sans-serif"],
+        display: ["var(--font-aller)", "system-ui", "sans-serif"],
       },
     },
   },

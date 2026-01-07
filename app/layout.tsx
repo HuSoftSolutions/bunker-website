@@ -8,22 +8,13 @@ import { ToastContainer } from "react-toastify";
 
 const aller = localFont({
   src: [
-    { path: "../public/assets/fonts/Aller_Std_Lt.ttf", weight: "300", style: "normal" },
-    { path: "../public/assets/fonts/Aller_Std_LtIt.ttf", weight: "300", style: "italic" },
-    { path: "../public/assets/fonts/Aller_Std_Rg.ttf", weight: "400", style: "normal" },
-    { path: "../public/assets/fonts/Aller_Std_It.ttf", weight: "400", style: "italic" },
-    { path: "../public/assets/fonts/Aller_Std_Bd.ttf", weight: "700", style: "normal" },
-    { path: "../public/assets/fonts/Aller_Std_BdIt.ttf", weight: "700", style: "italic" },
+    { path: "../public/assets/fonts/Aller_Rg.ttf", weight: "400", style: "normal" },
+    { path: "../public/assets/fonts/Aller_Bd.ttf", weight: "700", style: "normal" },
   ],
   display: "swap",
   variable: "--font-aller",
 });
 
-const allerDisplay = localFont({
-  src: "../public/assets/fonts/AllerDisplay_Std_Rg.ttf",
-  display: "swap",
-  variable: "--font-aller-display",
-});
 
 export const metadata: Metadata = {
   title: "The Bunker",
@@ -37,9 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${aller.variable} ${allerDisplay.variable} antialiased`}
-      >
+      <body className={`${aller.variable} antialiased`}>
         <FirebaseProvider>
           <AuthProvider>
             {children}
