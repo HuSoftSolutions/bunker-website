@@ -49,9 +49,13 @@ const normalizeAdditionalPro = (value: unknown): LessonsAdditionalPro | null => 
   const name = asString(record.name).trim();
   if (!name) return null;
   const description = asString(record.description).trim();
+  const phone = asString(record.phone).trim();
+  const email = asString(record.email).trim();
   return {
     name,
     description: description || undefined,
+    phone: phone || undefined,
+    email: email || undefined,
   };
 };
 

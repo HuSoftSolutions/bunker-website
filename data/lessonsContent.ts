@@ -10,6 +10,8 @@ export type LessonsFeaturedPro = {
 export type LessonsAdditionalPro = {
   name: string;
   description?: string;
+  phone?: string;
+  email?: string;
 };
 
 export type LessonsRate = {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
-import { FiChevronRight, FiMenu, FiX } from "react-icons/fi";
+import { FiMenu, FiX } from "react-icons/fi";
 import { ImFacebook, ImInstagram } from "react-icons/im";
 import * as ROUTES from "@/constants/routes";
 import { BookNowButton } from "@/components/buttons/BookNowButton";
@@ -18,15 +18,20 @@ const mobileLogo = "/assets/bunker-logo-mobile-site.svg";
 const GIFT_CARD_URL =
   "https://www.clover.com/online-ordering/the-bunker-guilderland/giftcard";
 
-const navLinks = [
-  { href: ROUTES.LANDING, label: "Home" },
-  { href: ROUTES.LOCATION, label: "Locations" },
-  { href: ROUTES.MENUS, label: "Menus" },
-  { href: ROUTES.CAREERS, label: "Careers" },
-  { href: ROUTES.ABOUT_US, label: "About" },
-  { href: ROUTES.CONTACT, label: "Contact" },
-  { href: ROUTES.FAQS, label: "FAQs" },
-];
+const navItems = [
+  { type: "link", href: ROUTES.LANDING, label: "Home" },
+  { type: "link", href: ROUTES.LOCATION, label: "Locations" },
+  { type: "external", href: "https://www.bunkerparties.com", label: "Events" },
+  { type: "action", action: "golf", label: "Golf Experiences" },
+  { type: "link", href: ROUTES.MENUS, label: "Menus" },
+  { type: "action", action: "gift", label: "Gift Cards" },
+  { type: "link", href: ROUTES.CAREERS, label: "Careers" },
+  { type: "link", href: ROUTES.FAQS, label: "FAQ" },
+  { type: "link", href: ROUTES.ABOUT_US, label: "About" },
+] as const;
+
+type NavItem = (typeof navItems)[number];
+type NavAction = Extract<NavItem, { type: "action" }>["action"];
 
 const golfLinks = [
   { href: ROUTES.LESSONS, label: "Lessons" },
@@ -48,6 +53,18 @@ export function NavigationBar() {
       typeof roles === "object" &&
       (roles as Record<string, unknown>).ADMIN,
   );
+
+  const handleNavAction = (action: NavAction) => {
+    if (action === "golf") {
+      setGolfDialogOpen(true);
+      setGiftCardsDialogOpen(false);
+      return;
+    }
+    if (action === "gift") {
+      setGiftCardsDialogOpen(true);
+      setGolfDialogOpen(false);
+    }
+  };
 
   return (
     <>
@@ -74,15 +91,36 @@ export function NavigationBar() {
 
           <nav className="hidden items-center gap-6 text-sm font-semibold uppercase text-white lg:flex">
             <div className="flex items-center gap-6">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="transition hover:text-primary"
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {navItems.map((item) =>
+                item.type === "link" ? (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="transition hover:text-primary"
+                  >
+                    {item.label}
+                  </Link>
+                ) : item.type === "external" ? (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition hover:text-primary"
+                  >
+                    {item.label}
+                  </a>
+                ) : (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className="transition hover:text-primary"
+                    onClick={() => handleNavAction(item.action)}
+                  >
+                    {item.label}
+                  </button>
+                ),
+              )}
               {isAdmin ? (
                 <Link
                   href={ROUTES.LOCATION_ADMIN}
@@ -91,32 +129,6 @@ export function NavigationBar() {
                   Admin Panel
                 </Link>
               ) : null}
-              <a
-                href="https://www.bunkerparties.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition uppercase hover:text-primary"
-              >
-                Events
-              </a>
-              <div className="group relative">
-                <span className="cursor-default text-white transition group-hover:text-primary">
-                  Golf ▾
-                </span>
-                <div className="invisible absolute left-1/2 top-full z-30 mt-3 -translate-x-1/2 rounded-2xl border border-white/10 bg-zinc-900/95 px-4 py-3 text-xs shadow-xl opacity-0 transition group-hover:visible group-hover:opacity-100">
-                  <div className="flex flex-col gap-2">
-                    {golfLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        className="uppercase tracking-wide text-white transition hover:text-primary"
-                      >
-                        {link.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="flex items-center gap-4">
@@ -169,51 +181,41 @@ export function NavigationBar() {
             <BookNowButton className="w-full" />
             <BookEventsButton className="w-full" />
             <LocationSelector className="w-full" />
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-xl bg-white/5 px-4 py-2 transition hover:bg-primary/20"
-                onClick={() => setMobileOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
-            <button
-              type="button"
-              className="rounded-xl bg-white/5 px-4 py-2 text-left uppercase transition hover:bg-primary/20"
-              onClick={() => {
-                setMobileOpen(false);
-                setGolfDialogOpen(false);
-                setGiftCardsDialogOpen(true);
-              }}
-            >
-              Gift Cards
-            </button>
-            <a
-              href="https://www.bunkerparties.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl bg-white/5 px-4 py-2 transition hover:bg-primary/20"
-              onClick={() => setMobileOpen(false)}
-            >
-              Events
-            </a>
-            <div className="flex flex-col gap-2 rounded-xl bg-white/5 px-4 py-3">
-              <span className="text-xs font-semibold tracking-wide text-primary">
-                Golf
-              </span>
-              {golfLinks.map((link) => (
+            {navItems.map((item) =>
+              item.type === "link" ? (
                 <Link
-                  key={link.href}
-                  href={link.href}
-                  className="text-white/80 transition hover:text-primary"
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-xl bg-white/5 px-4 py-2 transition hover:bg-primary/20"
                   onClick={() => setMobileOpen(false)}
                 >
-                  {link.label}
+                  {item.label}
                 </Link>
-              ))}
-            </div>
+              ) : item.type === "external" ? (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl bg-white/5 px-4 py-2 transition hover:bg-primary/20"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <button
+                  key={item.label}
+                  type="button"
+                  className="rounded-xl bg-white/5 px-4 py-2 text-left uppercase transition hover:bg-primary/20"
+                  onClick={() => {
+                    setMobileOpen(false);
+                    handleNavAction(item.action);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ),
+            )}
             {isAdmin ? (
               <Link
                 href={ROUTES.LOCATION_ADMIN}
@@ -271,44 +273,36 @@ export function NavigationBar() {
           </div>
 
           <nav className="flex flex-col gap-1 text-sm font-semibold uppercase tracking-wide text-white">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-full px-4 py-2 transition hover:bg-white/10"
-              >
-                {link.label}
-              </Link>
-            ))}
-
-            <button
-              type="button"
-              className="rounded-full px-4 py-2 text-left font-semibold uppercase tracking-wide transition hover:bg-white/10"
-              onClick={() => {
-                setGolfDialogOpen(false);
-                setGiftCardsDialogOpen(true);
-              }}
-            >
-              Gift Cards
-            </button>
-
-            <a
-              href="https://www.bunkerparties.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full px-4 py-2 transition hover:bg-white/10"
-            >
-              Events
-            </a>
-
-            <button
-              type="button"
-              onClick={() => setGolfDialogOpen(true)}
-              className="mt-3 flex items-center justify-between rounded-full border border-white/10 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-white transition hover:border-primary/60 hover:bg-white/10 hover:text-primary"
-            >
-              <span>Golf Experiences</span>
-              <FiChevronRight className="text-base" aria-hidden="true" />
-            </button>
+            {navItems.map((item) =>
+              item.type === "link" ? (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-full px-4 py-2 transition hover:bg-white/10"
+                >
+                  {item.label}
+                </Link>
+              ) : item.type === "external" ? (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full px-4 py-2 transition hover:bg-white/10"
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <button
+                  key={item.label}
+                  type="button"
+                  className="rounded-full px-4 py-2 text-left font-semibold uppercase tracking-wide transition hover:bg-white/10"
+                  onClick={() => handleNavAction(item.action)}
+                >
+                  {item.label}
+                </button>
+              ),
+            )}
           </nav>
 
           <div className="mt-auto space-y-4 text-white">

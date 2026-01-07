@@ -3,6 +3,18 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "firebasestorage.googleapis.com",
+      },
+      {
+        protocol: "https",
+        hostname: "storage.googleapis.com",
+      },
+    ],
+  },
   webpack(config, { dev, webpack }) {
     if (dev) {
       // pdfjs-dist ships a bundle that declares `var __webpack_exports__`.

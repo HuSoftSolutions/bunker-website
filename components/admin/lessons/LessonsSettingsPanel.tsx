@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type Firebase from "@/lib/firebase/client";
 import { onSnapshot, setDoc } from "firebase/firestore";
-import { ErrorBox, Field, FormCard, TextInput, Textarea } from "@/components/ui/Form";
+import { toast } from "react-toastify";
+import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
+import { Field, FormCard, TextInput, Textarea } from "@/components/ui/Form";
 import { Button } from "@/ui-kit/button";
 import {
   Dialog,
@@ -37,6 +39,8 @@ type AdditionalProForm = {
   id: string;
   name: string;
   description: string;
+  phone: string;
+  email: string;
 };
 
 type RateForm = {
@@ -141,6 +145,8 @@ const DEFAULT_STATE: LessonsConfigForm = {
     id: createId("additional"),
     name: pro.name,
     description: pro.description ?? "",
+    phone: pro.phone ?? "",
+    email: pro.email ?? "",
   })),
   rates: LEGACY_LESSONS_CONTENT.rates.items.map((rate) => ({
     id: createId("rate"),
@@ -184,6 +190,8 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
     email: "",
     image: "",
   });
+  const [featuredUploading, setFeaturedUploading] = useState(false);
+  const [featuredUploadError, setFeaturedUploadError] = useState<string | null>(null);
 
   const [additionalModalOpen, setAdditionalModalOpen] = useState(false);
   const [additionalEditingIndex, setAdditionalEditingIndex] = useState<number | null>(null);
@@ -191,6 +199,8 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
     id: createId("additional"),
     name: "",
     description: "",
+    phone: "",
+    email: "",
   });
 
   const [rateModalOpen, setRateModalOpen] = useState(false);
@@ -331,6 +341,8 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
                   id: createId("additional"),
                   name: typeof record?.name === "string" ? record.name : "",
                   description: typeof record?.description === "string" ? record.description : "",
+                  phone: typeof record?.phone === "string" ? record.phone : "",
+                  email: typeof record?.email === "string" ? record.email : "",
                 };
               })
             : cloneState(DEFAULT_STATE.additionalPros),
@@ -409,29 +421,61 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
       setFeaturedEditingIndex(index);
     }
     setFeaturedModalOpen(true);
+    setFeaturedUploadError(null);
   };
 
   const closeFeaturedModal = () => {
     setFeaturedModalOpen(false);
     setFeaturedEditingIndex(null);
+    setFeaturedUploadError(null);
   };
 
   const saveFeaturedDraft = () => {
-    setForm((prev) => {
-      const next = [...prev.featuredPros];
-      if (featuredEditingIndex === null) {
-        next.push(featuredDraft);
-      } else {
-        next[featuredEditingIndex] = featuredDraft;
-      }
-      return { ...prev, featuredPros: next };
-    });
+    const nextForm: LessonsConfigForm = {
+      ...form,
+      featuredPros: (() => {
+        const next = [...form.featuredPros];
+        if (featuredEditingIndex === null) {
+          next.push(featuredDraft);
+        } else {
+          next[featuredEditingIndex] = featuredDraft;
+        }
+        return next;
+      })(),
+    };
+    setForm(nextForm);
     closeFeaturedModal();
+    void handleSave(nextForm);
+  };
+
+  const handleFeaturedImageUpload = async (file: File) => {
+    const safeName = file.name.replace(/[^\w.\-()]+/g, "_");
+    const storagePath = `thebunker/lessons/headshots/${Date.now()}_${safeName}`;
+    const objectRef = storageRef(firebase.storage, storagePath);
+    setFeaturedUploading(true);
+    setFeaturedUploadError(null);
+
+    try {
+      await uploadBytes(objectRef, file, { contentType: file.type });
+      const url = await getDownloadURL(objectRef);
+      setFeaturedDraft((prev) => ({ ...prev, image: url }));
+    } catch (error) {
+      console.error("[LessonsSettings] headshot upload failed", error);
+      setFeaturedUploadError("Upload failed. Please try again.");
+    } finally {
+      setFeaturedUploading(false);
+    }
   };
 
   const openAdditionalModal = (index: number | null) => {
     if (index === null) {
-      setAdditionalDraft({ id: createId("additional"), name: "", description: "" });
+      setAdditionalDraft({
+        id: createId("additional"),
+        name: "",
+        description: "",
+        phone: "",
+        email: "",
+      });
       setAdditionalEditingIndex(null);
     } else {
       setAdditionalDraft({ ...form.additionalPros[index] });
@@ -551,38 +595,39 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
     closeTechModal();
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async (override?: LessonsConfigForm) => {
     setSaving(true);
     setError(null);
     setStatus("idle");
 
     try {
+      const source = override ?? form;
       const payload = {
-        heroTitle: form.heroTitle.trim() || DEFAULT_STATE.heroTitle,
-        heroSubtitle: form.heroSubtitle.trim() || null,
-        heroDescription: form.heroDescription.trim() || null,
-        introEyebrow: form.introEyebrow.trim() || null,
-        introTitle: form.introTitle.trim() || null,
-        introDescription: form.introDescription.trim() || null,
-        meetTheProsTitle: form.meetTheProsTitle.trim() || null,
-        meetTheProsDescription: form.meetTheProsDescription.trim() || null,
-        ctaTitle: form.ctaTitle.trim() || null,
-        ctaDescription: form.ctaDescription.trim() || null,
-        ctaButtonLabel: form.ctaButtonLabel.trim() || null,
-        ratesTitle: form.ratesTitle.trim() || null,
-        ratesDescription: form.ratesDescription.trim() || null,
-        formEyebrow: form.formEyebrow.trim() || null,
-        formTitle: form.formTitle.trim() || null,
-        formDescription: form.formDescription.trim() || null,
-        formSubmitLabel: form.formSubmitLabel.trim() || null,
-        formSuccessTitle: form.formSuccessTitle.trim() || null,
-        formSuccessMessage: form.formSuccessMessage.trim() || null,
-        formSentToLabel: form.formSentToLabel.trim() || null,
-        technologyTitle: form.technologyTitle.trim() || null,
-        technologyDescription: form.technologyDescription.trim() || null,
-        locations: normalizeLines(form.locations),
-        timesOfDay: normalizeLines(form.timesOfDay),
-        featuredPros: form.featuredPros
+        heroTitle: source.heroTitle.trim() || DEFAULT_STATE.heroTitle,
+        heroSubtitle: source.heroSubtitle.trim() || null,
+        heroDescription: source.heroDescription.trim() || null,
+        introEyebrow: source.introEyebrow.trim() || null,
+        introTitle: source.introTitle.trim() || null,
+        introDescription: source.introDescription.trim() || null,
+        meetTheProsTitle: source.meetTheProsTitle.trim() || null,
+        meetTheProsDescription: source.meetTheProsDescription.trim() || null,
+        ctaTitle: source.ctaTitle.trim() || null,
+        ctaDescription: source.ctaDescription.trim() || null,
+        ctaButtonLabel: source.ctaButtonLabel.trim() || null,
+        ratesTitle: source.ratesTitle.trim() || null,
+        ratesDescription: source.ratesDescription.trim() || null,
+        formEyebrow: source.formEyebrow.trim() || null,
+        formTitle: source.formTitle.trim() || null,
+        formDescription: source.formDescription.trim() || null,
+        formSubmitLabel: source.formSubmitLabel.trim() || null,
+        formSuccessTitle: source.formSuccessTitle.trim() || null,
+        formSuccessMessage: source.formSuccessMessage.trim() || null,
+        formSentToLabel: source.formSentToLabel.trim() || null,
+        technologyTitle: source.technologyTitle.trim() || null,
+        technologyDescription: source.technologyDescription.trim() || null,
+        locations: normalizeLines(source.locations),
+        timesOfDay: normalizeLines(source.timesOfDay),
+        featuredPros: source.featuredPros
           .map((pro) => ({
             name: pro.name.trim(),
             role: pro.role.trim(),
@@ -592,19 +637,21 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
             image: pro.image.trim() || null,
           }))
           .filter((pro) => pro.name && pro.role && pro.bio),
-        additionalPros: form.additionalPros
+        additionalPros: source.additionalPros
           .map((pro) => ({
             name: pro.name.trim(),
             description: pro.description.trim() || null,
+            phone: pro.phone.trim() || null,
+            email: pro.email.trim() || null,
           }))
           .filter((pro) => pro.name),
-        rates: form.rates
+        rates: source.rates
           .map((rate) => ({
             title: rate.title.trim(),
             details: normalizeLines(rate.details),
           }))
           .filter((rate) => rate.title && rate.details.length),
-        coachPrograms: form.coachPrograms
+        coachPrograms: source.coachPrograms
           .map((program) => ({
             title: program.title.trim(),
             description: program.description.trim(),
@@ -612,7 +659,7 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
             cost: program.cost.trim() || null,
           }))
           .filter((program) => program.title && program.description),
-        technologyLinks: form.technologyLinks
+        technologyLinks: source.technologyLinks
           .map((link) => ({
             label: link.label.trim(),
             href: link.href.trim(),
@@ -630,7 +677,15 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
     } finally {
       setSaving(false);
     }
-  };
+  }, [form]);
+
+  useEffect(() => {
+    if (status === "success") {
+      toast.success("Lessons settings saved.");
+    } else if (status === "error" && error) {
+      toast.error(error.message);
+    }
+  }, [status, error]);
 
   return (
     <div className="space-y-4">
@@ -652,14 +707,6 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
           {saving ? "Saving…" : "Save"}
         </button>
       </div>
-
-      {status === "success" ? (
-        <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
-          Saved.
-        </div>
-      ) : null}
-
-      {status === "error" && error ? <ErrorBox>{error.message}</ErrorBox> : null}
 
       <FormCard>
         <div className="grid gap-4 md:grid-cols-2">
@@ -826,6 +873,7 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
                   <TableRow>
                     <TableHeader>Pro</TableHeader>
                     <TableHeader>Description</TableHeader>
+                    <TableHeader>Contact</TableHeader>
                     <TableHeader className="text-right">Actions</TableHeader>
                   </TableRow>
                 </TableHead>
@@ -837,6 +885,16 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
                       </TableCell>
                       <TableCell className="max-w-[360px] truncate text-white/70">
                         {pro.description || "—"}
+                      </TableCell>
+                      <TableCell className="text-white/70">
+                        {pro.email || pro.phone ? (
+                          <span>
+                            {pro.email || "—"}
+                            {pro.phone ? ` • ${pro.phone}` : ""}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-2">
@@ -1261,15 +1319,43 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
                   }
                 />
               </Field>
-              <Field label="Headshot URL" className="md:col-span-2">
-                <TextInput
-                  type="url"
-                  inputMode="url"
-                  value={featuredDraft.image}
-                  onChange={(event) =>
-                    setFeaturedDraft((prev) => ({ ...prev, image: event.target.value }))
-                  }
-                />
+              <Field label="Headshot" className="md:col-span-2">
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        void handleFeaturedImageUpload(file);
+                      }
+                      event.currentTarget.value = "";
+                    }}
+                    className="block w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-white hover:file:bg-white/20"
+                    disabled={featuredUploading}
+                  />
+                  {featuredUploading ? (
+                    <Text className="text-xs text-white/60">Uploading headshot…</Text>
+                  ) : null}
+                  {featuredUploadError ? (
+                    <Text className="text-xs text-red-200">{featuredUploadError}</Text>
+                  ) : null}
+                  {featuredDraft.image ? (
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-white/70">
+                      <TextLink href={featuredDraft.image} target="_blank" rel="noreferrer">
+                        View current headshot
+                      </TextLink>
+                      <Button
+                        outline
+                        onClick={() => setFeaturedDraft((prev) => ({ ...prev, image: "" }))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <Text className="text-xs text-white/60">Upload a square image (JPG/PNG).</Text>
+                  )}
+                </div>
               </Field>
             </div>
           </DialogBody>
@@ -1290,11 +1376,11 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
             {additionalEditingIndex === null ? "Add Additional Pro" : "Edit Additional Pro"}
           </DialogTitle>
           <DialogDescription>
-            Update the supporting instructor list.
+            Update the supporting instructor details.
           </DialogDescription>
           <DialogBody>
-            <div className="grid gap-4">
-              <Field label="Name" required>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Name" required className="md:col-span-2">
                 <TextInput
                   value={additionalDraft.name}
                   onChange={(event) =>
@@ -1303,12 +1389,29 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
                   required
                 />
               </Field>
-              <Field label="Description">
+              <Field label="Description" className="md:col-span-2">
                 <Textarea
                   rows={3}
                   value={additionalDraft.description}
                   onChange={(event) =>
                     setAdditionalDraft((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                />
+              </Field>
+              <Field label="Phone">
+                <TextInput
+                  value={additionalDraft.phone}
+                  onChange={(event) =>
+                    setAdditionalDraft((prev) => ({ ...prev, phone: event.target.value }))
+                  }
+                />
+              </Field>
+              <Field label="Email">
+                <TextInput
+                  type="email"
+                  value={additionalDraft.email}
+                  onChange={(event) =>
+                    setAdditionalDraft((prev) => ({ ...prev, email: event.target.value }))
                   }
                 />
               </Field>

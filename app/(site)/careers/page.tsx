@@ -73,26 +73,26 @@ export default function CareersPage() {
                 return (
                   <article
                     key={locationId || locationName || `location-${index}`}
-                    className="rounded-3xl border border-white/10 bg-black/40 px-6 py-6 shadow-lg shadow-black/30"
+                    className="rounded-3xl border border-zinc-200/80 bg-white px-6 py-6 text-zinc-900 shadow-lg shadow-black/10"
                   >
                     <h3 className="text-xl font-semibold uppercase tracking-wide text-primary">
                       {locationName}
                     </h3>
                     {locationAddress ? (
-                      <p className="text-sm text-white/60">
+                      <p className="text-sm text-zinc-600">
                         {locationAddress}
                       </p>
                     ) : null}
 
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       {emails.map((email) => (
-                        <ExternalLinkButton
-                          key={email}
-                          title={email}
-                          url={`mailto:${email}`}
-                          className="bg-transparent text-xs text-white hover:bg-white/10"
-                        />
-                      ))}
+                          <ExternalLinkButton
+                            key={email}
+                            title={email}
+                            url={`mailto:${email}`}
+                            className="bg-zinc-900 text-xs text-white hover:bg-zinc-800"
+                          />
+                        ))}
                     </div>
                   </article>
                 );

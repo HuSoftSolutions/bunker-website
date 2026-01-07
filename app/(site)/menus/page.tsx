@@ -170,7 +170,7 @@ export default function MenusPage() {
               return (
                 <div
                   key={locationId || locationName}
-                  className="rounded-3xl border border-white/10 bg-black/40 p-4 shadow-lg"
+                  className="rounded-3xl border border-zinc-200/80 bg-white p-4 text-zinc-900 shadow-lg shadow-black/10"
                 >
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-2">
@@ -187,7 +187,7 @@ export default function MenusPage() {
                         {locationName} Menu
                       </button>
                       {hasBrunchMenu ? (
-                        <span className="inline-flex items-center rounded-full bg-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
                           Brunch Available
                         </span>
                       ) : null}
@@ -203,7 +203,7 @@ export default function MenusPage() {
                             key={key}
                             title={label}
                             url={url}
-                            className="bg-transparent text-xs text-white hover:bg-white/10"
+                            className="bg-zinc-900 text-xs text-white shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:bg-zinc-800 hover:shadow-black/30"
                           />
                         );
                       })}

@@ -196,23 +196,41 @@ export default function LessonsPage() {
               {config.additionalPros.map((pro) => (
                 <div
                   key={pro.name}
-                  className="group flex flex-col gap-3 rounded-3xl border border-white/5 bg-white/5 p-5 transition hover:border-primary/60 hover:bg-primary/10"
+                  className="group flex flex-col gap-3 rounded-3xl border border-zinc-200/80 bg-white p-5 text-zinc-900 shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-primary/20"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full border-[4px] border-primary/60 bg-black/70 text-base font-semibold uppercase text-white">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full border-[4px] border-primary/60 bg-zinc-100 text-base font-semibold uppercase text-primary">
                       {initials(pro.name)}
                     </div>
-                    <p className="text-base font-semibold uppercase tracking-wide text-white">
+                    <p className="text-base font-semibold uppercase tracking-wide text-zinc-900">
                       {pro.name}
                     </p>
                   </div>
                   {pro.description ? (
-                    <p className="text-sm text-white/70">{pro.description}</p>
+                    <p className="text-sm text-zinc-600">{pro.description}</p>
                   ) : (
-                    <p className="text-sm text-white/50">
+                    <p className="text-sm text-zinc-500">
                       Contact your location to check availability for {pro.name}.
                     </p>
                   )}
+                  {pro.phone || pro.email ? (
+                    <div className="flex flex-wrap gap-2 pt-1 text-xs font-semibold uppercase tracking-wide">
+                      {pro.phone ? (
+                        <ContactLink
+                          icon={<FiPhone className="text-base" />}
+                          href={`tel:${pro.phone.replace(/[^0-9]/g, "")}`}
+                          label={pro.phone}
+                        />
+                      ) : null}
+                      {pro.email ? (
+                        <ContactLink
+                          icon={<FiMail className="text-base" />}
+                          href={`mailto:${pro.email}`}
+                          label={pro.email}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -249,12 +267,12 @@ export default function LessonsPage() {
               {config.rates.items.map((rate) => (
                 <div
                   key={rate.title}
-                  className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-black/80 p-6 text-center shadow-lg"
+                  className="flex flex-col gap-3 rounded-3xl border border-zinc-200/80 bg-white p-6 text-center text-zinc-900 shadow-lg shadow-black/10"
                 >
-                  <p className="text-xl font-semibold uppercase tracking-wide text-white">
+                  <p className="text-xl font-semibold uppercase tracking-wide text-primary">
                     {rate.title}
                   </p>
-                  <div className="space-y-1 text-sm text-white/70">
+                  <div className="space-y-1 text-sm text-zinc-600">
                     {rate.details.map((detail) => (
                       <p key={detail}>{detail}</p>
                     ))}
@@ -267,15 +285,15 @@ export default function LessonsPage() {
               {config.coachPrograms.map((program) => (
                 <div
                   key={program.title}
-                  className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-black/85 p-6 shadow-lg"
+                  className="flex flex-col gap-4 rounded-3xl border border-zinc-200/80 bg-white p-6 text-zinc-900 shadow-lg shadow-black/10"
                 >
                   <div>
-                    <p className="text-xl font-semibold uppercase tracking-wide text-white">
+                    <p className="text-xl font-semibold uppercase tracking-wide text-primary">
                       {program.title}
                     </p>
-                    <p className="mt-2 text-sm text-white/70">{program.description}</p>
+                    <p className="mt-2 text-sm text-zinc-600">{program.description}</p>
                   </div>
-                  <ul className="list-disc space-y-2 pl-5 text-sm text-white/60">
+                  <ul className="list-disc space-y-2 pl-5 text-sm text-zinc-600">
                     {program.sessions.map((session) => (
                       <li key={session}>{session}</li>
                     ))}
@@ -294,7 +312,7 @@ export default function LessonsPage() {
               onSubmit={handleSubmit}
               className="w-full"
             >
-              <FormCard>
+              <FormCard className="border border-white/10 bg-zinc-900/70">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">
                     {config.form.eyebrow}
@@ -391,11 +409,11 @@ export default function LessonsPage() {
             </form>
           </div>
 
-          <div className="space-y-6 rounded-[32px] border border-white/10 bg-black/80 p-6 text-center text-white md:p-10">
-            <h3 className="text-2xl font-semibold uppercase tracking-[0.3em] text-primary">
+          <div className="space-y-6 rounded-[32px] border border-zinc-200/80 bg-white p-6 text-center text-zinc-900 shadow-lg shadow-black/10 md:p-10">
+            <h3 className="text-2xl font-semibold uppercase tracking-[0.3em] text-zinc-900">
               {config.technology.title}
             </h3>
-            <p className="mx-auto max-w-3xl text-sm text-white/70">
+            <p className="mx-auto max-w-3xl text-sm text-zinc-600">
               {config.technology.description}
             </p>
             <div className="flex flex-wrap justify-center gap-6 text-sm font-semibold uppercase tracking-wide text-primary">
@@ -405,7 +423,7 @@ export default function LessonsPage() {
                   href={tool.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="transition hover:text-white"
+                  className="transition hover:text-zinc-900"
                 >
                   {tool.label}
                 </Link>

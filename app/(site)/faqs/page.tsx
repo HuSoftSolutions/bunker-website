@@ -80,12 +80,12 @@ export default function FaqsPage() {
           {FAQS.map((item) => (
             <article
               key={item.question}
-              className="rounded-3xl border border-white/10 bg-black/30 px-6 py-6 shadow-lg shadow-black/30"
+              className="rounded-3xl border border-zinc-200/80 bg-white px-6 py-6 text-zinc-900 shadow-lg shadow-black/10"
             >
-              <h2 className="text-lg font-semibold uppercase tracking-wide text-white">
+              <h2 className="text-lg font-semibold uppercase tracking-wide text-zinc-900">
                 {item.question}
               </h2>
-              <p className="mt-3 text-sm text-white/70">{item.answer}</p>
+              <p className="mt-3 text-sm text-zinc-600">{item.answer}</p>
             </article>
           ))}
         </div>
