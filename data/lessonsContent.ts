@@ -12,6 +12,7 @@ export type LessonsAdditionalPro = {
   description?: string;
   phone?: string;
   email?: string;
+  image?: string;
 };
 
 export type LessonsRate = {

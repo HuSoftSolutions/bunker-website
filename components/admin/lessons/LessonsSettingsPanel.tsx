@@ -41,6 +41,7 @@ type AdditionalProForm = {
   description: string;
   phone: string;
   email: string;
+  image: string;
 };
 
 type RateForm = {
@@ -147,6 +148,7 @@ const DEFAULT_STATE: LessonsConfigForm = {
     description: pro.description ?? "",
     phone: pro.phone ?? "",
     email: pro.email ?? "",
+    image: pro.image ?? "",
   })),
   rates: LEGACY_LESSONS_CONTENT.rates.items.map((rate) => ({
     id: createId("rate"),
@@ -201,7 +203,10 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
     description: "",
     phone: "",
     email: "",
+    image: "",
   });
+  const [additionalUploading, setAdditionalUploading] = useState(false);
+  const [additionalUploadError, setAdditionalUploadError] = useState<string | null>(null);
 
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [rateEditingIndex, setRateEditingIndex] = useState<number | null>(null);
@@ -343,6 +348,7 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
                   description: typeof record?.description === "string" ? record.description : "",
                   phone: typeof record?.phone === "string" ? record.phone : "",
                   email: typeof record?.email === "string" ? record.email : "",
+                  image: typeof record?.image === "string" ? record.image : "",
                 };
               })
             : cloneState(DEFAULT_STATE.additionalPros),
@@ -467,6 +473,25 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
     }
   };
 
+  const handleAdditionalImageUpload = async (file: File) => {
+    const safeName = file.name.replace(/[^\w.\-()]+/g, "_");
+    const storagePath = `thebunker/lessons/additional-headshots/${Date.now()}_${safeName}`;
+    const objectRef = storageRef(firebase.storage, storagePath);
+    setAdditionalUploading(true);
+    setAdditionalUploadError(null);
+
+    try {
+      await uploadBytes(objectRef, file, { contentType: file.type });
+      const url = await getDownloadURL(objectRef);
+      setAdditionalDraft((prev) => ({ ...prev, image: url }));
+    } catch (error) {
+      console.error("[LessonsSettings] additional headshot upload failed", error);
+      setAdditionalUploadError("Upload failed. Please try again.");
+    } finally {
+      setAdditionalUploading(false);
+    }
+  };
+
   const openAdditionalModal = (index: number | null) => {
     if (index === null) {
       setAdditionalDraft({
@@ -475,6 +500,7 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
         description: "",
         phone: "",
         email: "",
+        image: "",
       });
       setAdditionalEditingIndex(null);
     } else {
@@ -482,11 +508,13 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
       setAdditionalEditingIndex(index);
     }
     setAdditionalModalOpen(true);
+    setAdditionalUploadError(null);
   };
 
   const closeAdditionalModal = () => {
     setAdditionalModalOpen(false);
     setAdditionalEditingIndex(null);
+    setAdditionalUploadError(null);
   };
 
   const saveAdditionalDraft = () => {
@@ -643,6 +671,7 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
             description: pro.description.trim() || null,
             phone: pro.phone.trim() || null,
             email: pro.email.trim() || null,
+            image: pro.image.trim() || null,
           }))
           .filter((pro) => pro.name),
         rates: source.rates
@@ -1414,6 +1443,44 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
                     setAdditionalDraft((prev) => ({ ...prev, email: event.target.value }))
                   }
                 />
+              </Field>
+              <Field label="Headshot" className="md:col-span-2">
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        void handleAdditionalImageUpload(file);
+                      }
+                      event.currentTarget.value = "";
+                    }}
+                    className="block w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-white hover:file:bg-white/20"
+                    disabled={additionalUploading}
+                  />
+                  {additionalUploading ? (
+                    <Text className="text-xs text-white/60">Uploading headshot…</Text>
+                  ) : null}
+                  {additionalUploadError ? (
+                    <Text className="text-xs text-red-200">{additionalUploadError}</Text>
+                  ) : null}
+                  {additionalDraft.image ? (
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-white/70">
+                      <TextLink href={additionalDraft.image} target="_blank" rel="noreferrer">
+                        View current headshot
+                      </TextLink>
+                      <Button
+                        outline
+                        onClick={() => setAdditionalDraft((prev) => ({ ...prev, image: "" }))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <Text className="text-xs text-white/60">Upload a square image (JPG/PNG).</Text>
+                  )}
+                </div>
               </Field>
             </div>
           </DialogBody>

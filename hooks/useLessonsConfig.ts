@@ -51,11 +51,13 @@ const normalizeAdditionalPro = (value: unknown): LessonsAdditionalPro | null => 
   const description = asString(record.description).trim();
   const phone = asString(record.phone).trim();
   const email = asString(record.email).trim();
+  const image = asString(record.image).trim();
   return {
     name,
     description: description || undefined,
     phone: phone || undefined,
     email: email || undefined,
+    image: image || undefined,
   };
 };
 

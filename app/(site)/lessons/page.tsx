@@ -199,9 +199,20 @@ export default function LessonsPage() {
                   className="group flex flex-col gap-3 rounded-3xl border border-zinc-200/80 bg-white p-5 text-zinc-900 shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-primary/20"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full border-[4px] border-primary/60 bg-zinc-100 text-base font-semibold uppercase text-primary">
-                      {initials(pro.name)}
-                    </div>
+                    {pro.image ? (
+                      <Image
+                        src={pro.image}
+                        alt={`${pro.name} headshot`}
+                        width={56}
+                        height={56}
+                        sizes="56px"
+                        className="h-14 w-14 rounded-full border-[4px] border-primary/60 bg-zinc-100 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full border-[4px] border-primary/60 bg-zinc-100 text-base font-semibold uppercase text-primary">
+                        {initials(pro.name)}
+                      </div>
+                    )}
                     <p className="text-base font-semibold uppercase tracking-wide text-zinc-900">
                       {pro.name}
                     </p>
