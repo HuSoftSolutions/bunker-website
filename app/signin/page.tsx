@@ -17,6 +17,9 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetStatus, setResetStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   const redirectTo = searchParams.get("redirect") || "/admin/locations";
   const isAllowed = isAdminOrManager(authUser) && !isDisabled(authUser);
@@ -42,6 +45,30 @@ export default function SignInPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setResetStatus("sending");
+    setResetMessage(null);
+
+    try {
+      const targetEmail = resetEmail.trim() || email.trim();
+      if (!targetEmail) {
+        setResetStatus("error");
+        setResetMessage("Enter your email to reset your password.");
+        return;
+      }
+      await firebase.doPasswordReset(targetEmail);
+      setResetStatus("sent");
+      setResetMessage("Password reset email sent. Check your inbox.");
+    } catch (err) {
+      console.error("[SignIn] password reset failed", err);
+      setResetStatus("error");
+      setResetMessage(
+        err instanceof Error ? err.message : "Unable to send reset email.",
+      );
     }
   };
 
@@ -96,6 +123,39 @@ export default function SignInPage() {
           >
             {loading ? "Signing In…" : "Sign In"}
           </button>
+        </form>
+
+        <form onSubmit={handlePasswordReset} className="space-y-3 text-center">
+          <p className="text-xs uppercase tracking-wide text-white/60">
+            Forgot your password?
+          </p>
+          <div className="flex flex-col gap-2">
+            <input
+              type="email"
+              value={resetEmail}
+              onChange={(event) => setResetEmail(event.target.value)}
+              className="rounded-xl border border-white/15 bg-black/40 px-4 py-3 text-sm text-white focus:border-primary focus:outline-none"
+              placeholder="Email address"
+            />
+            <button
+              type="submit"
+              disabled={resetStatus === "sending"}
+              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {resetStatus === "sending" ? "Sending…" : "Send reset email"}
+            </button>
+          </div>
+          {resetMessage ? (
+            <p
+              className={
+                resetStatus === "error"
+                  ? "rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs uppercase tracking-wide text-rose-300"
+                  : "rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs uppercase tracking-wide text-emerald-300"
+              }
+            >
+              {resetMessage}
+            </p>
+          ) : null}
         </form>
 
         <div className="space-y-2 text-center text-xs text-white/50">

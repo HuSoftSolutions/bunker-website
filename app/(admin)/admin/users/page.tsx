@@ -77,6 +77,7 @@ export default function AdminUsersPage() {
   const [userDrafts, setUserDrafts] = useState<Record<string, UserDraft>>({});
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [userError, setUserError] = useState<string | null>(null);
+  const [resetStatus, setResetStatus] = useState<Record<string, string>>({});
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const managerLocations = useMemo(
@@ -378,6 +379,34 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleSendReset = async (userId: string) => {
+    const user = users.find((entry) => entry.id === userId);
+    const email = user?.email;
+    if (!email) {
+      setUserError("User does not have an email on file.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Send a password reset email to ${email}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setResetStatus((prev) => ({ ...prev, [userId]: "sending" }));
+    setUserError(null);
+    try {
+      await firebase.doPasswordReset(email);
+      setResetStatus((prev) => ({ ...prev, [userId]: "sent" }));
+    } catch (error) {
+      console.error("[AdminUsers] password reset failed", error);
+      setResetStatus((prev) => ({ ...prev, [userId]: "error" }));
+      setUserError(
+        error instanceof Error ? error.message : "Unable to send reset email.",
+      );
+    }
+  };
+
   const condition = useMemo(
     () => (user: Record<string, unknown> | null) => isAdmin(user),
     [],
@@ -621,6 +650,17 @@ export default function AdminUsersPage() {
                                 disabled={isSaving || isDisabled}
                               >
                                 {isSaving ? "Saving…" : "Save"}
+                              </Button>
+                              <Button
+                                outline
+                                onClick={() => handleSendReset(user.id)}
+                                disabled={resetStatus[user.id] === "sending"}
+                              >
+                                {resetStatus[user.id] === "sent"
+                                  ? "Reset sent"
+                                  : resetStatus[user.id] === "sending"
+                                  ? "Sending…"
+                                  : "Send reset"}
                               </Button>
                               <Button
                                 color={isDisabled ? "emerald" : "red"}
