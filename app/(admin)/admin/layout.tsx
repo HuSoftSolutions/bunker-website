@@ -45,6 +45,13 @@ import {
   ADMIN_INQUIRY_STORAGE_KEYS,
   type AdminInquiryKind,
 } from "@/utils/adminReadState";
+import {
+  getManagerLocationIds,
+  isAdmin,
+  isAdminOrManager,
+  isDisabled,
+  isManager,
+} from "@/utils/auth";
 
 function readLastViewed(key: string) {
   if (typeof window === "undefined") {
@@ -106,17 +113,6 @@ function readAuthString(
   return typeof value === "string" ? value : undefined;
 }
 
-function hasAdminRole(authUser: Record<string, unknown> | null) {
-  if (!authUser || typeof authUser !== "object") {
-    return false;
-  }
-  const roles = authUser["roles"];
-  if (!roles || typeof roles !== "object") {
-    return false;
-  }
-  return Boolean((roles as Record<string, unknown>).ADMIN);
-}
-
 function resolveLocationId(location: LocationRecord | undefined) {
   const value = location?.id;
   return typeof value === "string" ? value : "";
@@ -157,7 +153,9 @@ export default function AdminLayout({
   }, []);
 
   const condition = useMemo(
-    () => (authUser: Record<string, unknown> | null) => hasAdminRole(authUser),
+    () =>
+      (authUser: Record<string, unknown> | null) =>
+        isAdminOrManager(authUser) && !isDisabled(authUser),
     [],
   );
 
@@ -182,6 +180,16 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { locations } = useLocations(firebase as Firebase);
+  const isAdminUser = isAdmin(authUser);
+  const isManagerUser = isManager(authUser);
+  const managerLocationIds = useMemo(
+    () => getManagerLocationIds(authUser),
+    [authUser],
+  );
+  const managerLocationTabs = useMemo(
+    () => new Set(["calendar", "beverages"]),
+    [],
+  );
 
   const displayName = readAuthString(authUser, "displayName") ?? readAuthString(authUser, "name");
   const email = readAuthString(authUser, "email");
@@ -192,10 +200,24 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     .slice(0, 2)
     .toUpperCase();
 
+  const navItems = useMemo(() => {
+    if (isAdminUser) {
+      return ADMIN_NAV_ITEMS;
+    }
+
+    if (isManagerUser) {
+      return ADMIN_NAV_ITEMS.filter(
+        (item) => item.view === "location" && managerLocationTabs.has(item.tab),
+      );
+    }
+
+    return [];
+  }, [isAdminUser, isManagerUser, managerLocationTabs]);
+
   const groupedNav = useMemo<AdminNavGroup[]>(() => {
     const groups: AdminNavGroup[] = [];
 
-    ADMIN_NAV_ITEMS.forEach((item) => {
+    navItems.forEach((item) => {
       const label = item.section ?? "General";
       const existingGroup = groups.find((group) => group.label === label);
       if (existingGroup) {
@@ -206,32 +228,44 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     });
 
     return groups;
-  }, []);
+  }, [navItems]);
 
   const viewParam = searchParams?.get("view");
   const tabParam = searchParams?.get("tab");
   const locationParam = searchParams?.get("locationId");
   const effectiveView = (viewParam === "business" || viewParam === "location") ? viewParam : "location";
-  const effectiveTab =
-    tabParam ??
-    (effectiveView === "business" ? "settings" : "general");
+  const effectiveTab = tabParam ?? (effectiveView === "business" ? "settings" : "general");
 
   const activeHref =
-    ADMIN_NAV_ITEMS.find(
+    navItems.find(
       (item) => item.view === effectiveView && item.tab === effectiveTab,
     )?.href ??
-    ADMIN_NAV_ITEMS.find((item) =>
+    navItems.find((item) =>
       pathname.startsWith(item.href.split("?")[0]),
     )?.href ??
     null;
 
+  const scopedLocations = useMemo(() => {
+    if (!isManagerUser || isAdminUser) {
+      return locations;
+    }
+
+    if (!managerLocationIds.length) {
+      return [];
+    }
+
+    return locations.filter((location) =>
+      managerLocationIds.includes(resolveLocationId(location)),
+    );
+  }, [isAdminUser, isManagerUser, locations, managerLocationIds]);
+
   const selectedLocationId =
     (locationParam
       ? resolveLocationId(
-          locations.find((location) => resolveLocationId(location) === locationParam),
+          scopedLocations.find((location) => resolveLocationId(location) === locationParam),
         )
       : "") ||
-    resolveLocationId(locations[0]) ||
+    resolveLocationId(scopedLocations[0]) ||
     "";
 
   const handleLocationChange = (nextId: string) => {
@@ -263,6 +297,51 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     selectedLocationId,
   ]);
 
+  useEffect(() => {
+    if (!isManagerUser || isAdminUser) {
+      return;
+    }
+
+    if (!pathname.startsWith("/admin/locations")) {
+      router.replace("/admin/locations?view=location&tab=calendar");
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams?.toString());
+    let updated = false;
+
+    if (params.get("view") !== "location") {
+      params.set("view", "location");
+      updated = true;
+    }
+
+    const currentTab = params.get("tab");
+    if (!currentTab || !managerLocationTabs.has(currentTab)) {
+      params.set("tab", "calendar");
+      updated = true;
+    }
+
+    if (managerLocationIds.length) {
+      const locationId = params.get("locationId");
+      if (!locationId || !managerLocationIds.includes(locationId)) {
+        params.set("locationId", managerLocationIds[0] ?? "");
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [
+    isAdminUser,
+    isManagerUser,
+    managerLocationIds,
+    managerLocationTabs,
+    pathname,
+    router,
+    searchParams,
+  ]);
+
   const handleSignOut = async () => {
     try {
       await firebase.doSignOut();
@@ -287,7 +366,7 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
           firebase={firebase}
           groups={groupedNav}
           activeHref={activeHref}
-          locations={locations}
+          locations={scopedLocations}
           selectedLocationId={selectedLocationId}
           onLocationChange={handleLocationChange}
           displayName={displayName}

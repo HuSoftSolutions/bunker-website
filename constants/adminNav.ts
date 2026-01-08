@@ -1,4 +1,4 @@
-import { LOCATION_ADMIN } from "./routes";
+import { ADMIN_USERS, LOCATION_ADMIN } from "./routes";
 
 export const ADMIN_NAV_ITEMS = [
   {
@@ -133,5 +133,12 @@ export const ADMIN_NAV_ITEMS = [
     section: "Inquiries",
     view: "business",
     tab: "inquiry-settings",
+  },
+  {
+    href: ADMIN_USERS,
+    label: "User Management",
+    section: "Admin",
+    view: "admin",
+    tab: "users",
   },
 ] as const;

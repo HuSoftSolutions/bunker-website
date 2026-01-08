@@ -149,6 +149,12 @@ class Firebase {
   usersRef = (): CollectionReference<DocumentData> =>
     collection(this.db, "users");
 
+  userInvitesRef = (): CollectionReference<DocumentData> =>
+    collection(this.db, "userInvites");
+
+  userInviteRef = (id: string): DocumentReference<DocumentData> =>
+    doc(this.db, `userInvites/${id}`);
+
   messageRef = (uid: string): DocumentReference<DocumentData> =>
     doc(this.db, `messages/${uid}`);
 

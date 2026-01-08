@@ -12,6 +12,7 @@ import { BookEventsButton } from "@/components/buttons/BookEventsButton";
 import { ExternalLinkButton } from "@/components/buttons/ExternalLinkButton";
 import { LocationSelector } from "@/components/location/LocationSelector";
 import { useAuth } from "@/providers/AuthProvider";
+import { isAdminOrManager, isDisabled } from "@/utils/auth";
 
 const desktopLogo = "/assets/Bunker_Trademarked_Desktop.png";
 const mobileLogo = "/assets/bunker-logo-mobile-site.svg";
@@ -47,12 +48,7 @@ export function NavigationBar() {
   const [giftCardsDialogOpen, setGiftCardsDialogOpen] = useState(false);
   const { authUser } = useAuth();
 
-  const roles = (authUser as { roles?: Record<string, unknown> } | null)?.roles;
-  const isAdmin = Boolean(
-    roles &&
-      typeof roles === "object" &&
-      (roles as Record<string, unknown>).ADMIN,
-  );
+  const isAllowedAdmin = isAdminOrManager(authUser) && !isDisabled(authUser);
 
   const handleNavAction = (action: NavAction) => {
     if (action === "golf") {
@@ -121,7 +117,7 @@ export function NavigationBar() {
                   </button>
                 ),
               )}
-              {isAdmin ? (
+              {isAllowedAdmin ? (
                 <Link
                   href={ROUTES.LOCATION_ADMIN}
                   className="rounded-full border border-primary/40 px-4 py-1 text-xs uppercase tracking-wide text-primary transition hover:bg-primary/10"
@@ -216,7 +212,7 @@ export function NavigationBar() {
                 </button>
               ),
             )}
-            {isAdmin ? (
+            {isAllowedAdmin ? (
               <Link
                 href={ROUTES.LOCATION_ADMIN}
                 className="rounded-xl bg-primary/20 px-4 py-2 text-center text-xs font-semibold uppercase tracking-wide text-primary"
@@ -306,7 +302,7 @@ export function NavigationBar() {
           </nav>
 
           <div className="mt-auto space-y-4 text-white">
-            {isAdmin ? (
+            {isAllowedAdmin ? (
               <Link
                 href={ROUTES.LOCATION_ADMIN}
                 className="flex w-full items-center justify-center rounded-full border border-primary/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-primary transition hover:bg-primary/10"

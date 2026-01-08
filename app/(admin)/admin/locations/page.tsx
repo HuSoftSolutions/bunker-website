@@ -34,6 +34,8 @@ import { DEFAULT_MEMBERSHIP_CONTENT, type MembershipFormContent } from "@/data/m
 import useLocations, { mergeLocationRecord } from "@/hooks/useLocations";
 import type Firebase from "@/lib/firebase/client";
 import { useFirebase } from "@/providers/FirebaseProvider";
+import { useAuth } from "@/providers/AuthProvider";
+import { getManagerLocationIds, isAdmin, isManager } from "@/utils/auth";
 import { Button } from "@/ui-kit/button";
 import { Badge } from "@/ui-kit/badge";
 import { Checkbox, CheckboxField } from "@/ui-kit/checkbox";
@@ -72,7 +74,7 @@ import {
 	type MouseEvent,
 	type SetStateAction,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { onSnapshot, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 
@@ -1000,10 +1002,18 @@ function useCalendarAdminState(
 
 export default function LocationsAdminPage() {
   const firebase = useFirebase() as Firebase;
+  const { authUser } = useAuth();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { locations, loading } = useLocations(firebase);
   const businessState = useBusinessSettingsAdminState(firebase);
   const noticeInfoState = useNoticeInfoAdminState(firebase);
+  const isAdminUser = isAdmin(authUser);
+  const isManagerUser = isManager(authUser);
+  const managerLocationIds = useMemo(
+    () => getManagerLocationIds(authUser),
+    [authUser],
+  );
 
   const [adminView, setAdminView] = useState<"business" | "location">("location");
   const [businessTab, setBusinessTab] = useState<BusinessTab>("settings");
@@ -1016,21 +1026,36 @@ export default function LocationsAdminPage() {
     },
   );
 
+  const scopedLocations = useMemo(() => {
+    if (!isManagerUser || isAdminUser) {
+      return locations;
+    }
+
+    if (!managerLocationIds.length) {
+      return [];
+    }
+
+    return locations.filter((location) =>
+      managerLocationIds.includes(resolveStringValue(location.id)),
+    );
+  }, [isAdminUser, isManagerUser, locations, managerLocationIds]);
+
   useEffect(() => {
     const viewParam = searchParams?.get("view");
     const tabParam = searchParams?.get("tab");
     const locationIdParam = searchParams?.get("locationId");
-
-    const resolvedView =
-      viewParam === "business"
+    const isManagerRestricted = isManagerUser && !isAdminUser;
+    const resolvedView = isManagerRestricted
+      ? "location"
+      : viewParam === "business"
         ? "business"
         : viewParam === "location"
           ? "location"
           : null;
 
-    if (viewParam === "business") {
+    if (resolvedView === "business") {
       setAdminView("business");
-    } else if (viewParam === "location") {
+    } else if (resolvedView === "location") {
       setAdminView("location");
     }
 
@@ -1048,18 +1073,25 @@ export default function LocationsAdminPage() {
       "inquiry-settings",
     ];
 
-    const allowedLocationTabs: AdminTab[] = [
-      "general",
-      "menus",
-      "beverages",
-      "rates",
-      "calendar",
-      "ordering",
-      "career",
-      "map",
-    ];
+    const allowedLocationTabs: AdminTab[] = isManagerRestricted
+      ? ["calendar", "beverages"]
+      : [
+          "general",
+          "menus",
+          "beverages",
+          "rates",
+          "calendar",
+          "ordering",
+          "career",
+          "map",
+        ];
 
-    if (!tabParam) return;
+    if (!tabParam) {
+      if (isManagerRestricted) {
+        setActiveTab("calendar");
+      }
+      return;
+    }
 
     if ((resolvedView ?? adminView) === "business") {
       if (allowedTabs.includes(tabParam as BusinessTab)) {
@@ -1070,21 +1102,54 @@ export default function LocationsAdminPage() {
 
     if (allowedLocationTabs.includes(tabParam as AdminTab)) {
       setActiveTab(tabParam as AdminTab);
+    } else if (isManagerRestricted) {
+      setActiveTab("calendar");
     }
 
     if (locationIdParam && locationIdParam !== selectedLocationId) {
       setSelectedLocationId(locationIdParam);
     }
-  }, [searchParams, adminView, selectedLocationId]);
+  }, [
+    adminView,
+    isAdminUser,
+    isManagerUser,
+    searchParams,
+    selectedLocationId,
+  ]);
 
   useEffect(() => {
-    if (!selectedLocationId && locations.length) {
-      const nextId = locations[0]?.id;
+    if (!selectedLocationId && scopedLocations.length) {
+      const nextId = scopedLocations[0]?.id;
       if (typeof nextId === "string") {
         setSelectedLocationId(nextId);
       }
     }
-  }, [locations, selectedLocationId]);
+  }, [scopedLocations, selectedLocationId]);
+
+  useEffect(() => {
+    if (!isManagerUser || isAdminUser) {
+      return;
+    }
+
+    if (!managerLocationIds.length) {
+      return;
+    }
+
+    const locationIdParam = searchParams?.get("locationId");
+    if (!locationIdParam || !managerLocationIds.includes(locationIdParam)) {
+      const params = new URLSearchParams(searchParams?.toString());
+      params.set("view", "location");
+      params.set("tab", "calendar");
+      params.set("locationId", managerLocationIds[0] ?? "");
+      router.replace(`/admin/locations?${params.toString()}`);
+    }
+  }, [
+    isAdminUser,
+    isManagerUser,
+    managerLocationIds,
+    router,
+    searchParams,
+  ]);
 
   const {
     form,
@@ -1101,8 +1166,9 @@ export default function LocationsAdminPage() {
     selectedLocationId || null,
   );
   const selectedLocation = useMemo(
-    () => locations.find((location) => location.id === selectedLocationId) ?? null,
-    [locations, selectedLocationId],
+    () =>
+      scopedLocations.find((location) => location.id === selectedLocationId) ?? null,
+    [scopedLocations, selectedLocationId],
   );
 
   const isLoading = loading || docLoading;
@@ -1217,6 +1283,10 @@ export default function LocationsAdminPage() {
           {businessTab === "inquiry-settings" ? (
             <InquirySettingsPanel firebase={firebase} />
           ) : null}
+        </div>
+      ) : !scopedLocations.length && isManagerUser && !isAdminUser ? (
+        <div className="rounded-3xl border border-white/10 bg-zinc-950 p-6 text-sm text-white/70 shadow-xl shadow-black/30">
+          No locations are assigned to this manager yet. Ask an admin to update your access.
         </div>
       ) : (
         <div className="rounded-3xl border border-white/10 bg-zinc-950 shadow-xl shadow-black/30">

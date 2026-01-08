@@ -146,18 +146,20 @@ export default function LandingPage() {
         className="border-t border-white/10"
       />
 
-      <section className="relative overflow-hidden">
-        <video
-          key={videoSource}
-          className="absolute inset-0 h-full w-full object-cover"
-          autoPlay
-          loop
-          muted
-          playsInline
-        >
-          <source src={videoSource} type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
+      <section className="relative">
+        <div className="absolute inset-0 overflow-hidden">
+          <video
+            key={videoSource}
+            className="absolute inset-0 h-full w-full object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+          >
+            <source src={videoSource} type="video/mp4" />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
+        </div>
         <div className="relative mx-auto flex min-h-[70vh] w-full max-w-6xl flex-col items-center justify-center gap-6 px-4 py-20 text-center md:gap-8">
           <h1 className="text-4xl font-bold uppercase tracking-[0.2em] text-white drop-shadow md:text-5xl font-sans">
             Get in the Bunker!

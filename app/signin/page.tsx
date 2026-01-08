@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useFirebase } from "@/providers/FirebaseProvider";
 import { useAuth } from "@/providers/AuthProvider";
+import { isAdminOrManager, isDisabled } from "@/utils/auth";
 
 export default function SignInPage() {
   const firebase = useFirebase();
@@ -18,15 +19,13 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
 
   const redirectTo = searchParams.get("redirect") || "/admin/locations";
-  const isAdmin = Boolean(
-    (authUser as { roles?: Record<string, unknown> } | null)?.roles?.ADMIN,
-  );
+  const isAllowed = isAdminOrManager(authUser) && !isDisabled(authUser);
 
   useEffect(() => {
-    if (!authLoading && isAdmin) {
+    if (!authLoading && isAllowed) {
       router.replace(redirectTo);
     }
-  }, [authLoading, isAdmin, redirectTo, router]);
+  }, [authLoading, isAllowed, redirectTo, router]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -55,7 +54,7 @@ export default function SignInPage() {
             Sign In
           </h1>
           <p className="text-sm text-white/70">
-            Enter your administrator credentials to access The Bunker control room.
+            Enter your admin or manager credentials to access The Bunker control room.
           </p>
         </div>
 

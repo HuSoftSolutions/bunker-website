@@ -43,7 +43,10 @@ export function LocationSelector({ className }: LocationSelectorProps) {
             leaveTo="transform scale-95 opacity-0"
             as={Fragment}
           >
-            <Menu.Items className="absolute left-0 z-40 mt-2 w-full min-w-[220px] rounded-2xl border border-white/10 bg-zinc-900/95 p-1 shadow-2xl shadow-black/40 backdrop-blur">
+            <Menu.Items
+              modal={false}
+              className="absolute left-0 z-40 mt-2 w-full min-w-[220px] rounded-2xl border border-white/10 bg-zinc-900/95 p-1 shadow-2xl shadow-black/40 backdrop-blur"
+            >
               {locations.map((location, index) => {
                 const locationId = resolveStringValue(location?.id);
                 const locationName = resolveStringValue(
