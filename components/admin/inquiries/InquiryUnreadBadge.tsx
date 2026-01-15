@@ -11,43 +11,11 @@ import { useFittingsInquiries } from "@/hooks/useFittingsInquiries";
 import { useMembershipInquiries } from "@/hooks/useMembershipInquiries";
 import { useEventsInquiries } from "@/hooks/useEventsInquiries";
 import {
-  ADMIN_INQUIRY_READ_STATE_EVENT,
-  ADMIN_INQUIRY_STORAGE_KEYS,
   type AdminInquiryKind,
+  resolveAdminInquiryReadStateMap,
 } from "@/utils/adminReadState";
-
-function readLastViewed(key: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const stored = window.localStorage.getItem(key);
-    if (!stored) return null;
-    const parsed = new Date(stored);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  } catch {
-    return null;
-  }
-}
-
-function readReadIds(key: string) {
-  if (typeof window === "undefined") {
-    return new Set<string>();
-  }
-  try {
-    const stored = window.localStorage.getItem(key);
-    if (!stored) return new Set<string>();
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return new Set<string>();
-    const next = new Set<string>();
-    parsed.forEach((id) => {
-      if (typeof id === "string" && id) next.add(id);
-    });
-    return next;
-  } catch {
-    return new Set<string>();
-  }
-}
+import { useAuth } from "@/providers/AuthProvider";
+import { onSnapshot } from "firebase/firestore";
 
 function formatBadgeValue(count: number) {
   if (count <= 0) return "";
@@ -62,6 +30,8 @@ type InquiryUnreadBadgeProps = {
 };
 
 export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadBadgeProps) {
+  const { authUser } = useAuth();
+  const userId = typeof authUser?.uid === "string" ? authUser.uid : null;
   const franchise = useFranchiseInquiries(firebase, {});
   const career = useCareerInquiries(firebase);
   const lesson = useLessonsInquiries(firebase);
@@ -70,32 +40,32 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
   const membership = useMembershipInquiries(firebase);
   const events = useEventsInquiries(firebase);
 
-  const [version, setVersion] = useState(0);
+  const [readStateMap, setReadStateMap] = useState(() => resolveAdminInquiryReadStateMap(null));
 
   useEffect(() => {
-    const handler = (event: Event) => {
-      const custom = event as CustomEvent<{ kind?: AdminInquiryKind }>;
-      if (custom?.detail?.kind && custom.detail.kind !== kind) {
-        return;
-      }
-      setVersion((v) => v + 1);
-    };
-    window.addEventListener(ADMIN_INQUIRY_READ_STATE_EVENT, handler as EventListener);
-    window.addEventListener("storage", handler as EventListener);
+    if (!userId) {
+      setReadStateMap(resolveAdminInquiryReadStateMap(null));
+      return;
+    }
+    const unsubscribe = onSnapshot(firebase.userRef(userId), (snapshot) => {
+      setReadStateMap(
+        resolveAdminInquiryReadStateMap(snapshot.data()?.adminInquiryState),
+      );
+    });
     return () => {
-      window.removeEventListener(ADMIN_INQUIRY_READ_STATE_EVENT, handler as EventListener);
-      window.removeEventListener("storage", handler as EventListener);
+      unsubscribe();
     };
-  }, [kind]);
-
-  const storageKeys = ADMIN_INQUIRY_STORAGE_KEYS[kind];
+  }, [firebase, userId]);
 
   const unreadCount = useMemo(() => {
-    const lastViewedAt = readLastViewed(storageKeys.lastViewed);
-    const readIds = readReadIds(storageKeys.readIds);
+    const readState = readStateMap[kind];
+    const lastViewedAt = readState?.lastViewedAt ?? null;
+    const readIds = readState?.readIds ?? new Set<string>();
+    const unreadIds = readState?.unreadIds ?? new Set<string>();
 
     if (kind === "franchise") {
       return franchise.inquiries.reduce((count, inquiry) => {
+        if (unreadIds.has(inquiry.inquiryId)) return count + 1;
         if (readIds.has(inquiry.inquiryId)) return count;
         const recordDate = inquiry.submittedAtDate ?? inquiry.createdAtDate ?? null;
         if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
@@ -105,6 +75,7 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
 
     if (kind === "career") {
       return career.inquiries.reduce((count, inquiry) => {
+        if (unreadIds.has(inquiry.inquiryId)) return count + 1;
         if (readIds.has(inquiry.inquiryId)) return count;
         const recordDate = inquiry.createdAtDate ?? null;
         if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
@@ -114,6 +85,7 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
 
     if (kind === "lesson") {
       return lesson.inquiries.reduce((count, inquiry) => {
+        if (unreadIds.has(inquiry.inquiryId)) return count + 1;
         if (readIds.has(inquiry.inquiryId)) return count;
         const recordDate = inquiry.createdAtDate ?? null;
         if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
@@ -123,6 +95,7 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
 
     if (kind === "fitting") {
       return fitting.inquiries.reduce((count, inquiry) => {
+        if (unreadIds.has(inquiry.inquiryId)) return count + 1;
         if (readIds.has(inquiry.inquiryId)) return count;
         const recordDate = inquiry.createdAtDate ?? null;
         if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
@@ -132,6 +105,7 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
 
     if (kind === "membership") {
       return membership.inquiries.reduce((count, inquiry) => {
+        if (unreadIds.has(inquiry.inquiryId)) return count + 1;
         if (readIds.has(inquiry.inquiryId)) return count;
         const recordDate = inquiry.createdAtDate ?? null;
         if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
@@ -141,6 +115,7 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
 
     if (kind === "event") {
       return events.inquiries.reduce((count, inquiry) => {
+        if (unreadIds.has(inquiry.inquiryId)) return count + 1;
         if (readIds.has(inquiry.inquiryId)) return count;
         const recordDate = inquiry.createdAtDate ?? null;
         if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
@@ -149,17 +124,15 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
     }
 
     return league.inquiries.reduce((count, inquiry) => {
+      if (unreadIds.has(inquiry.inquiryId)) return count + 1;
       if (readIds.has(inquiry.inquiryId)) return count;
       const recordDate = inquiry.createdAtDate ?? null;
       if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
       return count + 1;
     }, 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     kind,
-    storageKeys.lastViewed,
-    storageKeys.readIds,
-    version,
+    readStateMap,
     franchise.inquiries,
     career.inquiries,
     lesson.inquiries,
@@ -168,6 +141,10 @@ export function InquiryUnreadBadge({ firebase, kind, className }: InquiryUnreadB
     membership.inquiries,
     events.inquiries,
   ]);
+
+  if (!userId) {
+    return null;
+  }
 
   if (!unreadCount) {
     return null;

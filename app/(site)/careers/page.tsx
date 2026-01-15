@@ -1,38 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
 import { PageHero } from "@/components/layout/PageHero";
-import useLocations from "@/hooks/useLocations";
 import { useFirebase } from "@/providers/FirebaseProvider";
 import { ExternalLinkButton } from "@/components/buttons/ExternalLinkButton";
 import { CareerApplicationForm } from "@/components/careers/CareerApplicationForm";
-
-const resolveStringValue = (value: unknown, fallback = "") =>
-  typeof value === "string" && value.trim() ? value : fallback;
-
-const resolveStringArrayValue = (value: unknown) => {
-  if (Array.isArray(value)) {
-    return value.filter(
-      (item): item is string => typeof item === "string" && Boolean(item.trim()),
-    );
-  }
-
-  if (typeof value === "string" && value.trim()) {
-    return [value];
-  }
-
-  return [];
-};
+import { useInquirySettings } from "@/hooks/useInquirySettings";
 
 export default function CareersPage() {
   const firebase = useFirebase();
-  const { locations } = useLocations(firebase);
-
-  const hiringLocations = useMemo(() => {
-    return locations.filter(
-      (location) => resolveStringArrayValue(location?.careerEmails).length > 0,
-    );
-  }, [locations]);
+  const { settings } = useInquirySettings(firebase);
+  const recipients = settings.careersDefaultRecipients;
 
   return (
     <div className="flex flex-col">
@@ -56,52 +33,23 @@ export default function CareersPage() {
 
         <div className="mt-12 space-y-6">
           <h2 className="text-lg font-semibold uppercase tracking-wide text-white">
-            Location Contacts
+            Careers Contact
           </h2>
 
-          {hiringLocations.length ? (
-            <div className="space-y-4">
-              {hiringLocations.map((location, index) => {
-                const emails = resolveStringArrayValue(location.careerEmails);
-                const locationId = resolveStringValue(location.id);
-                const locationName = resolveStringValue(
-                  location.name,
-                  "Location",
-                );
-                const locationAddress = resolveStringValue(location.address);
-
-                return (
-                  <article
-                    key={locationId || locationName || `location-${index}`}
-                    className="rounded-3xl border border-zinc-200/80 bg-white px-6 py-6 text-zinc-900 shadow-lg shadow-black/10"
-                  >
-                    <h3 className="text-xl font-semibold uppercase tracking-wide text-primary">
-                      {locationName}
-                    </h3>
-                    {locationAddress ? (
-                      <p className="text-sm text-zinc-600">
-                        {locationAddress}
-                      </p>
-                    ) : null}
-
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
-                      {emails.map((email) => (
-                          <ExternalLinkButton
-                            key={email}
-                            title={email}
-                            url={`mailto:${email}`}
-                            className="bg-zinc-900 text-xs text-white hover:bg-zinc-800"
-                          />
-                        ))}
-                    </div>
-                  </article>
-                );
-              })}
+          {recipients.length ? (
+            <div className="flex flex-wrap gap-3">
+              {recipients.map((email) => (
+                <ExternalLinkButton
+                  key={email}
+                  title={email}
+                  url={`mailto:${email}`}
+                  className="bg-zinc-900 text-xs text-white hover:bg-zinc-800"
+                />
+              ))}
             </div>
           ) : (
             <p className="rounded-3xl border border-dashed border-white/20 bg-black/20 px-6 py-12 text-center text-white/60">
-              We&apos;re not actively hiring right now, but feel free to send
-              your resume and we&apos;ll reach out when positions open up.
+              No careers contact emails have been configured yet.
             </p>
           )}
         </div>

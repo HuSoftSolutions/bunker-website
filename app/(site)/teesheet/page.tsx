@@ -75,7 +75,7 @@ export default function TeesheetPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-black via-zinc-950 to-black text-white">
       <header className="border-b border-white/10 bg-black/60">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex w-full max-w-full flex-col gap-3 px-4 py-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-primary/70">
               Book Now

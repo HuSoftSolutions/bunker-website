@@ -1,4 +1,4 @@
-import { ADMIN_USERS, LOCATION_ADMIN } from "./routes";
+import { ADMIN_USERS, LOCATION_ADMIN, SIGN_TVS_ADMIN } from "./routes";
 
 export const ADMIN_NAV_ITEMS = [
   {
@@ -37,18 +37,18 @@ export const ADMIN_NAV_ITEMS = [
     tab: "calendar",
   },
   {
+    href: `${LOCATION_ADMIN}?view=location&tab=sign-tvs`,
+    label: "Sign TVs",
+    section: "Locations",
+    view: "location",
+    tab: "sign-tvs",
+  },
+  {
     href: `${LOCATION_ADMIN}?view=location&tab=ordering`,
     label: "Ordering Links",
     section: "Locations",
     view: "location",
     tab: "ordering",
-  },
-  {
-    href: `${LOCATION_ADMIN}?view=location&tab=career`,
-    label: "Career Emails",
-    section: "Locations",
-    view: "location",
-    tab: "career",
   },
   {
     href: `${LOCATION_ADMIN}?view=location&tab=map`,
@@ -140,5 +140,12 @@ export const ADMIN_NAV_ITEMS = [
     section: "Admin",
     view: "admin",
     tab: "users",
+  },
+  {
+    href: SIGN_TVS_ADMIN,
+    label: "Sign TVs",
+    section: "Admin",
+    view: "admin",
+    tab: "sign-tvs",
   },
 ] as const;

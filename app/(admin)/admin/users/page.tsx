@@ -520,6 +520,7 @@ export default function AdminUsersPage() {
                     <TableHeader>Role</TableHeader>
                     <TableHeader>Locations</TableHeader>
                     <TableHeader>Status</TableHeader>
+                    <TableHeader className="text-right">Invite</TableHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -544,11 +545,24 @@ export default function AdminUsersPage() {
                         <TableCell className="text-white/60">
                           {invite.status ?? "pending"}
                         </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            outline
+                            type="button"
+                            onClick={() =>
+                              handleCopyInvite(
+                                `${origin || ""}/signup?invite=${invite.id}`,
+                              )
+                            }
+                          >
+                            Copy link
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell className="text-white/60" colSpan={4}>
+                      <TableCell className="text-white/60" colSpan={5}>
                         No invites yet.
                       </TableCell>
                     </TableRow>

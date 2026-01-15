@@ -160,7 +160,7 @@ export default function LandingPage() {
           </video>
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
         </div>
-        <div className="relative mx-auto flex min-h-[70vh] w-full max-w-6xl flex-col items-center justify-center gap-6 px-4 py-20 text-center md:gap-8">
+        <div className="relative mx-auto flex min-h-[70vh] w-full max-w-full flex-col items-center justify-center gap-6 px-4 py-20 text-center md:gap-8">
           <h1 className="text-4xl font-bold uppercase tracking-[0.2em] text-white drop-shadow md:text-5xl font-sans">
             Get in the Bunker!
           </h1>
@@ -177,7 +177,7 @@ export default function LandingPage() {
       </section>
 
 			      <section className="bg-zinc-950 py-16">
-        <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 md:grid-cols-[1fr,1fr] md:items-center">
+        <div className="mx-auto grid w-full max-w-full gap-10 px-4 md:grid-cols-[1fr,1fr] md:items-center">
           <div className="space-y-6 text-left">
             <h2 className="text-3xl font-bold uppercase text-white md:text-4xl">
               Why Trackman?
@@ -202,7 +202,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="mx-auto mt-12 grid w-full max-w-6xl gap-6 px-4 md:grid-cols-3">
+        <div className="mx-auto mt-12 grid w-full max-w-full gap-6 px-4 md:grid-cols-3">
           {TRACKMAN_FEATURES.map((feature) => (
             <div
               key={feature.title}
@@ -226,7 +226,7 @@ export default function LandingPage() {
       </section>
 
       <section className="bg-black py-16">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 text-center">
+        <div className="mx-auto flex w-full max-w-full flex-col gap-6 px-4 text-center">
           <h2 className="text-3xl font-bold uppercase tracking-wide text-white">
             Take a Tour
           </h2>

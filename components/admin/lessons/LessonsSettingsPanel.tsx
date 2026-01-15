@@ -706,7 +706,7 @@ export function LessonsSettingsPanel({ firebase }: LessonsSettingsPanelProps) {
     } finally {
       setSaving(false);
     }
-  }, [form]);
+  }, [firebase, form]);
 
   useEffect(() => {
     if (status === "success") {

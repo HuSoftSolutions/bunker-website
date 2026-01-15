@@ -13,16 +13,15 @@ import {
   resolveWorkflowStatus,
 } from "@/utils/inquiryWorkflow";
 import { formatPhone } from "@/utils/format";
-import { emitAdminInquiryReadStateChanged } from "@/utils/adminReadState";
+import { useAuth } from "@/providers/AuthProvider";
+import { type AdminInquiryKind, resolveAdminInquiryReadState } from "@/utils/adminReadState";
 import {
   InquiryBoard,
   type InquiryBoardItem,
 } from "./InquiryBoard";
 import { WorkflowControls } from "./WorkflowControls";
-import { doc, updateDoc } from "firebase/firestore";
+import { arrayRemove, arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
 
-const LAST_VIEWED_STORAGE_KEY = "admin-fitting-inquiries-last-viewed";
-const READ_IDS_STORAGE_KEY = "admin-fitting-inquiries-read-ids";
 const VIEW_MODE_STORAGE_KEY = "admin-fitting-inquiries-view-mode";
 
 type DateRange = {
@@ -56,6 +55,7 @@ type InquiryDrawerProps = {
   inquiry: FittingsInquiry | null;
   onClose: () => void;
   onMarkRead: (inquiryId: string) => void;
+  onMarkUnread: (inquiryId: string) => void;
   onArchive: (inquiryId: string) => void;
   isUnread: boolean;
   workflowState: Record<string, InquiryWorkflowEntry>;
@@ -79,6 +79,7 @@ function InquiryDrawer({
   inquiry,
   onClose,
   onMarkRead,
+  onMarkUnread,
   onArchive,
   isUnread,
   workflowState,
@@ -118,7 +119,15 @@ function InquiryDrawer({
               >
                 Mark Read
               </button>
-            ) : null}
+            ) : (
+              <button
+                type="button"
+                onClick={() => onMarkUnread(inquiry.inquiryId)}
+                className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-primary/60 hover:text-primary"
+              >
+                Mark Unread
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onArchive(inquiry.inquiryId)}
@@ -196,59 +205,36 @@ export function FittingInquiriesPanel({ firebase }: FittingInquiriesPanelProps) 
   const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(null);
   const [lastViewedAt, setLastViewedAt] = useState<Date | null>(null);
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set<string>());
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set<string>());
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const { settings } = useInquirySettings(firebase);
   const boardEnabled = settings.fittingsBoardEnabled;
   const boardStatuses = settings.fittingsBoardStatuses;
+  const { authUser } = useAuth();
+  const inquiryKind: AdminInquiryKind = "fitting";
+  const userId = typeof authUser?.uid === "string" ? authUser.uid : null;
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const stored = window.localStorage.getItem(LAST_VIEWED_STORAGE_KEY);
-      if (stored) {
-        const parsed = new Date(stored);
-        if (!Number.isNaN(parsed.getTime())) setLastViewedAt(parsed);
-      }
-    } catch (error) {
-      console.warn("[FittingInquiries] failed to read last-viewed state", error);
+    if (!userId) {
+      setLastViewedAt(null);
+      setReadIds(new Set<string>());
+      setUnreadIds(new Set<string>());
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const stored = window.localStorage.getItem(READ_IDS_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          const next = new Set<string>();
-          parsed.forEach((id) => {
-            if (typeof id === "string" && id) next.add(id);
-          });
-          setReadIds(next);
-        }
-      }
-    } catch (error) {
-      console.warn("[FittingInquiries] failed to read read-ids state", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      if (readIds.size) {
-        window.localStorage.setItem(
-          READ_IDS_STORAGE_KEY,
-          JSON.stringify(Array.from(readIds)),
-        );
-      } else {
-        window.localStorage.removeItem(READ_IDS_STORAGE_KEY);
-      }
-      emitAdminInquiryReadStateChanged("fitting");
-    } catch (error) {
-      console.warn("[FittingInquiries] failed to persist read-ids state", error);
-    }
-  }, [readIds]);
+    const unsubscribe = onSnapshot(firebase.userRef(userId), (snapshot) => {
+      const state = resolveAdminInquiryReadState(
+        (snapshot.data()?.adminInquiryState as Record<string, unknown> | undefined)?.[
+          inquiryKind
+        ],
+      );
+      setLastViewedAt(state.lastViewedAt);
+      setReadIds(state.readIds);
+      setUnreadIds(state.unreadIds);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [firebase, inquiryKind, userId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -338,7 +324,11 @@ export function FittingInquiriesPanel({ firebase }: FittingInquiriesPanelProps) 
     const unread = new Set<string>();
     if (!inquiries.length) return unread;
 
-    inquiries.forEach((inquiry) => unread.add(inquiry.inquiryId));
+    const inquiryIdSet = new Set<string>();
+    inquiries.forEach((inquiry) => {
+      unread.add(inquiry.inquiryId);
+      inquiryIdSet.add(inquiry.inquiryId);
+    });
 
     inquiries.forEach((inquiry) => {
       const recordDate = resolveRecordDate(inquiry);
@@ -348,8 +338,13 @@ export function FittingInquiriesPanel({ firebase }: FittingInquiriesPanelProps) 
     });
 
     readIds.forEach((id) => unread.delete(id));
+    unreadIds.forEach((id) => {
+      if (inquiryIdSet.has(id)) {
+        unread.add(id);
+      }
+    });
     return unread;
-  }, [inquiries, lastViewedAt, readIds]);
+  }, [inquiries, lastViewedAt, readIds, unreadIds]);
 
   const boardItems = useMemo<InquiryBoardItem[]>(() => {
     return filteredInquiries.map((inquiry) => ({
@@ -387,19 +382,53 @@ export function FittingInquiriesPanel({ firebase }: FittingInquiriesPanelProps) 
   }, [inquiries, selectedInquiryId]);
 
   const handleMarkInquiryRead = useCallback((inquiryId: string) => {
+    if (!userId) return;
     setReadIds((prev) => new Set(prev).add(inquiryId));
-  }, []);
+    setUnreadIds((prev) => {
+      if (!prev.has(inquiryId)) return prev;
+      const next = new Set(prev);
+      next.delete(inquiryId);
+      return next;
+    });
+    updateDoc(firebase.userRef(userId), {
+      [`adminInquiryState.${inquiryKind}.readIds`]: arrayUnion(inquiryId),
+      [`adminInquiryState.${inquiryKind}.unreadIds`]: arrayRemove(inquiryId),
+    }).catch((error) => {
+      console.error("[FittingInquiries] failed to mark inquiry read", error);
+    });
+  }, [firebase, inquiryKind, userId]);
+
+  const handleMarkInquiryUnread = useCallback((inquiryId: string) => {
+    if (!userId) return;
+    setUnreadIds((prev) => new Set(prev).add(inquiryId));
+    setReadIds((prev) => {
+      if (!prev.has(inquiryId)) return prev;
+      const next = new Set(prev);
+      next.delete(inquiryId);
+      return next;
+    });
+    updateDoc(firebase.userRef(userId), {
+      [`adminInquiryState.${inquiryKind}.readIds`]: arrayRemove(inquiryId),
+      [`adminInquiryState.${inquiryKind}.unreadIds`]: arrayUnion(inquiryId),
+    }).catch((error) => {
+      console.error("[FittingInquiries] failed to mark inquiry unread", error);
+    });
+  }, [firebase, inquiryKind, userId]);
 
   const handleMarkAllViewed = useCallback(() => {
+    if (!userId) return;
     const latest = latestInquiryDate ?? new Date();
     setLastViewedAt(latest);
-    try {
-      window.localStorage.setItem(LAST_VIEWED_STORAGE_KEY, latest.toISOString());
-      emitAdminInquiryReadStateChanged("fitting");
-    } catch (error) {
-      console.warn("[FittingInquiries] failed to persist last-viewed state", error);
-    }
-  }, [latestInquiryDate]);
+    setReadIds(new Set<string>());
+    setUnreadIds(new Set<string>());
+    updateDoc(firebase.userRef(userId), {
+      [`adminInquiryState.${inquiryKind}.lastViewedAt`]: latest.toISOString(),
+      [`adminInquiryState.${inquiryKind}.readIds`]: [],
+      [`adminInquiryState.${inquiryKind}.unreadIds`]: [],
+    }).catch((error) => {
+      console.error("[FittingInquiries] failed to mark all read", error);
+    });
+  }, [firebase, inquiryKind, latestInquiryDate, userId]);
 
   const handleRetry = useCallback(() => {
     setRefreshToken((token) => token + 1);
@@ -651,6 +680,7 @@ export function FittingInquiriesPanel({ firebase }: FittingInquiriesPanelProps) 
         inquiry={selectedInquiry}
         onClose={() => setSelectedInquiryId(null)}
         onMarkRead={handleMarkInquiryRead}
+        onMarkUnread={handleMarkInquiryUnread}
         onArchive={handleArchiveInquiry}
         isUnread={selectedInquiry ? unreadInquiryIds.has(selectedInquiry.inquiryId) : false}
         workflowState={workflowState}

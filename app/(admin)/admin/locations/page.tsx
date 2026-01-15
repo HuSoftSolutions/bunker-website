@@ -5,9 +5,6 @@ import {
   CareerInquiriesPanel,
 } from "@/components/admin/inquiries/CareerInquiriesPanel";
 import {
-  EventInquiriesPanel,
-} from "@/components/admin/inquiries/EventInquiriesPanel";
-import {
   FittingInquiriesPanel,
 } from "@/components/admin/inquiries/FittingInquiriesPanel";
 import {
@@ -26,6 +23,7 @@ import { JuniorGolfSettingsPanel } from "@/components/admin/juniorGolf/JuniorGol
 import { FittingsSettingsPanel } from "@/components/admin/fittings/FittingsSettingsPanel";
 import { LessonsSettingsPanel } from "@/components/admin/lessons/LessonsSettingsPanel";
 import { BeverageMenusTab } from "@/components/admin/beverageMenus/BeverageMenusTab";
+import { SignTvManager } from "@/components/admin/signTv/SignTvManager";
 import {
 	FALLBACK_LOCATIONS,
 	FALLBACK_LOCATION_MAP,
@@ -71,7 +69,6 @@ import {
 	useRef,
 	useState,
 	type Dispatch,
-	type MouseEvent,
 	type SetStateAction,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -84,9 +81,9 @@ type AdminTab =
   | "beverages"
   | "rates"
   | "ordering"
-  | "career"
   | "map"
-  | "calendar";
+  | "calendar"
+  | "sign-tvs";
 
 type BusinessTab =
   | "settings"
@@ -878,6 +875,22 @@ const buildTimestampFromForm = (date: string, time: string) => {
   return parsed;
 };
 
+const sortCalendarEvents = (events: CalendarFormEvent[]) => {
+  return events
+    .map((event, index) => {
+      const timestamp = buildTimestampFromForm(event.date, event.time);
+      const sortValue = timestamp ? timestamp.getTime() : Number.POSITIVE_INFINITY;
+      return { event, index, sortValue };
+    })
+    .sort((a, b) => {
+      if (a.sortValue !== b.sortValue) {
+        return a.sortValue - b.sortValue;
+      }
+      return a.index - b.index;
+    })
+    .map(({ event }) => event);
+};
+
 const serializeCalendarEvent = (event: CalendarFormEvent) => {
   const extras = { ...(event.extras || {}) };
   const payload: Record<string, unknown> = {
@@ -938,7 +951,7 @@ function useCalendarAdminState(
           const normalized = rawEvents.map((entry: Record<string, unknown>) =>
             normalizeCalendarEvent(entry),
           );
-          const cloned = cloneCalendarEvents(normalized);
+          const cloned = cloneCalendarEvents(sortCalendarEvents(normalized));
           setEvents(cloned);
           setInitial(cloneCalendarEvents(cloned));
           setLoading(false);
@@ -971,14 +984,16 @@ function useCalendarAdminState(
     setError(null);
 
     try {
-      const serialized = events.map((event) => serializeCalendarEvent(event));
+      const sorted = sortCalendarEvents(events);
+      const serialized = sorted.map((event) => serializeCalendarEvent(event));
       await setDoc(
         firebase.calendarEventsRef(locationId),
         { calendarEvents: serialized },
         { merge: true },
       );
       setStatus("success");
-      setInitial(cloneCalendarEvents(events));
+      setEvents(cloneCalendarEvents(sorted));
+      setInitial(cloneCalendarEvents(sorted));
     } catch (err) {
       console.error("[CalendarAdmin] failed to save", err);
       setError(err instanceof Error ? err : new Error(String(err)));
@@ -1074,7 +1089,7 @@ export default function LocationsAdminPage() {
     ];
 
     const allowedLocationTabs: AdminTab[] = isManagerRestricted
-      ? ["calendar", "beverages"]
+      ? ["calendar", "beverages", "sign-tvs"]
       : [
           "general",
           "menus",
@@ -1082,8 +1097,8 @@ export default function LocationsAdminPage() {
           "rates",
           "calendar",
           "ordering",
-          "career",
           "map",
+          "sign-tvs",
         ];
 
     if (!tabParam) {
@@ -1302,6 +1317,7 @@ export default function LocationsAdminPage() {
                 onSave={save}
                 onReset={reset}
                 firebase={firebase}
+                canManageTvs={isAdminUser}
                 calendarState={calendarState}
                 defaultLocationName={
                   typeof form?.name === "string"
@@ -2011,6 +2027,7 @@ function TabContent({
   onSave,
   onReset,
   firebase,
+  canManageTvs,
   calendarState,
   defaultLocationName,
 }: {
@@ -2021,6 +2038,7 @@ function TabContent({
   onSave: () => Promise<void>;
   onReset: () => void;
   firebase: Firebase;
+  canManageTvs: boolean;
   calendarState: CalendarAdminState;
   defaultLocationName: string;
 }) {
@@ -2107,18 +2125,25 @@ function TabContent({
         <OrderingLinksTab form={form} onChange={handleInputChange} />
       ) : null}
 
-      {tab === "career" ? (
-        <CareerEmailsTab
-          emails={Array.isArray(form.careerEmails) ? form.careerEmails : []}
-          onChange={(emails) => handleInputChange("careerEmails", emails)}
-        />
-      ) : null}
-
       {tab === "map" ? (
         <MapTab
           coordinates={form.coordinates ?? { lat: "", lng: "" }}
           onChange={(coordinates) => handleInputChange("coordinates", coordinates)}
           locationName={resolveStringValue(form.name)}
+        />
+      ) : null}
+
+      {tab === "sign-tvs" ? (
+        <SignTvManager
+          firebase={firebase}
+          locationId={resolveStringValue(form.id)}
+          locationName={resolveStringValue(form.name, defaultLocationName ?? "")}
+          signTvs={Array.isArray(form.signTvs) ? form.signTvs : []}
+          mode="location"
+          canManageTvs={canManageTvs}
+          canManageBusinessGraphics={false}
+          canManageLocationGraphics
+          onChangeSignTvs={(next) => handleInputChange("signTvs", next)}
         />
       ) : null}
 
@@ -2644,10 +2669,12 @@ function CalendarTab({
     const normalized = { ...draft, extras: { ...(draft.extras || {}) } };
 
     if (modalMode === "create") {
-      setEvents((prev) => [...prev, normalized]);
+      setEvents((prev) => sortCalendarEvents([...prev, normalized]));
     } else if (modalMode === "edit" && editingIndex !== null) {
       setEvents((prev) =>
-        prev.map((event, idx) => (idx === editingIndex ? normalized : event)),
+        sortCalendarEvents(
+          prev.map((event, idx) => (idx === editingIndex ? normalized : event)),
+        ),
       );
     }
     closeModal();
@@ -2659,22 +2686,6 @@ function CalendarTab({
       closeModal();
     }
   }, [modalMode, editingIndex, setEvents, closeModal]);
-
-  const moveEvent = useCallback(
-    (index: number, direction: -1 | 1) => {
-      setEvents((prev) => {
-        const targetIndex = index + direction;
-        if (targetIndex < 0 || targetIndex >= prev.length) {
-          return prev;
-        }
-        const next = [...prev];
-        const [item] = next.splice(index, 1);
-        next.splice(targetIndex, 0, item);
-        return next;
-      });
-    },
-    [setEvents],
-  );
 
   return (
     <div className="space-y-6">
@@ -2716,7 +2727,6 @@ function CalendarTab({
                 <TableHeader>Time</TableHeader>
                 <TableHeader>Feed</TableHeader>
                 <TableHeader>Location</TableHeader>
-                <TableHeader className="text-right">Actions</TableHeader>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -2740,30 +2750,6 @@ function CalendarTab({
                   </TableCell>
                   <TableCell className="text-white/80">
                     {event.locationName || defaultLocationName || "—"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        outline
-                        onClick={(event: MouseEvent<HTMLButtonElement>) => {
-                          event.stopPropagation();
-                          moveEvent(index, -1);
-                        }}
-                        disabled={index === 0}
-                      >
-                        Up
-                      </Button>
-                      <Button
-                        outline
-                        onClick={(event: MouseEvent<HTMLButtonElement>) => {
-                          event.stopPropagation();
-                          moveEvent(index, 1);
-                        }}
-                        disabled={index === events.length - 1}
-                      >
-                        Down
-                      </Button>
-                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -2800,28 +2786,6 @@ function CalendarTab({
                 <Text className="text-[0.7rem] uppercase tracking-wide text-white/60">
                   {event.showOnFeed ? "Shown on feed" : "Hidden from feed"}
                 </Text>
-                <div className="flex items-center gap-2">
-                  <Button
-                    outline
-                    onClick={(event: MouseEvent<HTMLButtonElement>) => {
-                      event.stopPropagation();
-                      moveEvent(index, -1);
-                    }}
-                    disabled={index === 0}
-                  >
-                    Up
-                  </Button>
-                  <Button
-                    outline
-                    onClick={(event: MouseEvent<HTMLButtonElement>) => {
-                      event.stopPropagation();
-                      moveEvent(index, 1);
-                    }}
-                    disabled={index === events.length - 1}
-                  >
-                    Down
-                  </Button>
-                </div>
               </div>
             </div>
           ))}
@@ -3122,54 +3086,6 @@ function OrderingLinksTab({ form, onChange }: OrderingLinksTabProps) {
           />
         </FormField>
       ))}
-    </div>
-  );
-}
-
-type CareerEmailsTabProps = {
-  emails: string[];
-  onChange: (emails: string[]) => void;
-};
-
-function CareerEmailsTab({ emails, onChange }: CareerEmailsTabProps) {
-  const updateEmail = (index: number, value: string) => {
-    const next = emails.map((email, idx) => (idx === index ? value : email));
-    onChange(next);
-  };
-
-  const addEmail = () => {
-    onChange([...emails, ""]);
-  };
-
-  const removeEmail = (index: number) => {
-    onChange(emails.filter((_, idx) => idx !== index));
-  };
-
-  return (
-    <div className="space-y-4">
-      <Button outline onClick={addEmail}>
-        Add Email
-      </Button>
-
-      <div className="space-y-3">
-        {emails.length === 0 ? (
-          <Text className="text-sm text-white/60">No emails yet. Add at least one contact.</Text>
-        ) : null}
-
-        {emails.map((email, index) => (
-          <div key={`career-email-${index}`} className="flex gap-3">
-            <Input
-              type="email"
-              value={email}
-              onChange={(event) => updateEmail(index, event.target.value)}
-              placeholder="careers@getinthebunker.golf"
-            />
-            <Button color="red" onClick={() => removeEmail(index)}>
-              Remove
-            </Button>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

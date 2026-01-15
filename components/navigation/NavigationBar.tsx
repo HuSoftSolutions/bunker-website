@@ -65,7 +65,7 @@ export function NavigationBar() {
   return (
     <>
       <header className="sticky top-0 z-40 bg-black/90 backdrop-blur lg:hidden">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 md:py-4">
+        <div className="mx-auto flex w-full max-w-full items-center justify-between px-4 py-3 md:py-4">
           <Link href={ROUTES.LANDING} className="flex items-center gap-2">
             <Image
               src={desktopLogo}

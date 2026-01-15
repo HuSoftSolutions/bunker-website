@@ -41,9 +41,10 @@ import type Firebase from "@/lib/firebase/client";
 import type { LocationRecord } from "@/data/locationConfig";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ADMIN_INQUIRY_READ_STATE_EVENT,
-  ADMIN_INQUIRY_STORAGE_KEYS,
   type AdminInquiryKind,
+  type AdminInquiryReadState,
+  DEFAULT_READ_STATE_MAP,
+  resolveAdminInquiryReadStateMap,
 } from "@/utils/adminReadState";
 import {
   getManagerLocationIds,
@@ -52,49 +53,18 @@ import {
   isDisabled,
   isManager,
 } from "@/utils/auth";
-
-function readLastViewed(key: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const stored = window.localStorage.getItem(key);
-    if (!stored) return null;
-    const parsed = new Date(stored);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  } catch {
-    return null;
-  }
-}
-
-function readReadIds(key: string) {
-  if (typeof window === "undefined") {
-    return new Set<string>();
-  }
-  try {
-    const stored = window.localStorage.getItem(key);
-    if (!stored) return new Set<string>();
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return new Set<string>();
-    const next = new Set<string>();
-    parsed.forEach((id) => {
-      if (typeof id === "string" && id) next.add(id);
-    });
-    return next;
-  } catch {
-    return new Set<string>();
-  }
-}
+import { onSnapshot } from "firebase/firestore";
 
 function computeUnreadCount<T>(
   inquiries: T[],
-  lastViewedAt: Date | null,
-  readIds: Set<string>,
+  readState: AdminInquiryReadState,
   getRecordDate: (inquiry: T) => Date | null,
   getId: (inquiry: T) => string,
 ) {
+  const { lastViewedAt, readIds, unreadIds } = readState;
   return inquiries.reduce((count, inquiry) => {
     const inquiryId = getId(inquiry);
+    if (unreadIds.has(inquiryId)) return count + 1;
     if (readIds.has(inquiryId)) return count;
     const recordDate = getRecordDate(inquiry);
     if (recordDate && lastViewedAt && recordDate <= lastViewedAt) return count;
@@ -187,7 +157,7 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     [authUser],
   );
   const managerLocationTabs = useMemo(
-    () => new Set(["calendar", "beverages"]),
+    () => new Set(["calendar", "beverages", "sign-tvs"]),
     [],
   );
 
@@ -237,6 +207,9 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
   const effectiveTab = tabParam ?? (effectiveView === "business" ? "settings" : "general");
 
   const activeHref =
+    navItems.find(
+      (item) => item.view === "admin" && pathname.startsWith(item.href),
+    )?.href ??
     navItems.find(
       (item) => item.view === effectiveView && item.tab === effectiveTab,
     )?.href ??
@@ -364,6 +337,7 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
       sidebar={({ closeSidebar }) => (
         <AdminSidebar
           firebase={firebase}
+          authUser={authUser}
           groups={groupedNav}
           activeHref={activeHref}
           locations={scopedLocations}
@@ -435,6 +409,7 @@ function AdminNavbar({
 
 function AdminSidebar({
   firebase,
+  authUser,
   groups,
   activeHref,
   locations,
@@ -447,6 +422,7 @@ function AdminSidebar({
   onNavigate,
 }: {
   firebase: Firebase;
+  authUser: Record<string, unknown> | null;
   groups: AdminNavGroup[];
   activeHref: string | null;
   locations: LocationRecord[];
@@ -465,34 +441,35 @@ function AdminSidebar({
   const fitting = useFittingsInquiries(firebase);
   const membership = useMembershipInquiries(firebase);
   const event = useEventsInquiries(firebase);
-  const [version, setVersion] = useState(0);
+  const [readStateMap, setReadStateMap] = useState(DEFAULT_READ_STATE_MAP);
 
   useEffect(() => {
-    const handler = () => {
-      setVersion((value) => value + 1);
-    };
-    window.addEventListener(ADMIN_INQUIRY_READ_STATE_EVENT, handler as EventListener);
-    window.addEventListener("storage", handler as EventListener);
+    const userId = typeof authUser?.uid === "string" ? authUser.uid : null;
+    if (!userId) {
+      setReadStateMap(DEFAULT_READ_STATE_MAP);
+      return;
+    }
+    const unsubscribe = onSnapshot(firebase.userRef(userId), (snapshot) => {
+      setReadStateMap(
+        resolveAdminInquiryReadStateMap(snapshot.data()?.adminInquiryState),
+      );
+    });
     return () => {
-      window.removeEventListener(ADMIN_INQUIRY_READ_STATE_EVENT, handler as EventListener);
-      window.removeEventListener("storage", handler as EventListener);
+      unsubscribe();
     };
-  }, []);
+  }, [authUser?.uid, firebase]);
 
   const inquiryCounts = useMemo(() => {
-    void version;
     const computeCounts = <T,>(
       kind: AdminInquiryKind,
       inquiries: T[],
       getRecordDate: (inquiry: T) => Date | null,
       getId: (inquiry: T) => string,
     ) => {
-      const storageKeys = ADMIN_INQUIRY_STORAGE_KEYS[kind];
-      const lastViewedAt = readLastViewed(storageKeys.lastViewed);
-      const readIds = readReadIds(storageKeys.readIds);
+      const readState = readStateMap[kind] ?? DEFAULT_READ_STATE_MAP[kind];
       return {
         total: inquiries.length,
-        unread: computeUnreadCount(inquiries, lastViewedAt, readIds, getRecordDate, getId),
+        unread: computeUnreadCount(inquiries, readState, getRecordDate, getId),
       };
     };
 
@@ -541,6 +518,7 @@ function AdminSidebar({
       ),
     } satisfies Record<AdminInquiryKind, { total: number; unread: number }>;
   }, [
+    readStateMap,
     franchise.inquiries,
     career.inquiries,
     lesson.inquiries,
@@ -548,7 +526,6 @@ function AdminSidebar({
     fitting.inquiries,
     membership.inquiries,
     event.inquiries,
-    version,
   ]);
 
   const inquiryTabMap: Record<string, AdminInquiryKind> = {

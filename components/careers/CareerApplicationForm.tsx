@@ -41,17 +41,6 @@ function formatLocationId(value: string) {
   return value.replace(", NY", "").trim().toLowerCase().replace(/\s+/g, "");
 }
 
-function parseEmails(value: unknown): string[] {
-  const list = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
-  const uniq = new Set<string>();
-  list.forEach((email) => {
-    if (typeof email === "string" && email.trim()) {
-      uniq.add(email.trim());
-    }
-  });
-  return Array.from(uniq);
-}
-
 async function uploadResume(firebase: Firebase, file: File): Promise<ResumeMeta> {
   const safeName = file.name.replace(/[^\w.\-()]+/g, "_");
   const storagePath = `thebunker/resumes/${Date.now()}_${safeName}`;
@@ -96,15 +85,10 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
     return locationOptions.find((option) => option.id === locationId)?.label ?? "";
   }, [locationId, locationOptions]);
 
-  const resolvedRecipients = useMemo(() => {
-    if (!locationId) {
-      return settings.careersDefaultRecipients;
-    }
-
-    const target = locations.find((loc) => loc.id === locationId);
-    const locationEmails = parseEmails(target?.careerEmails);
-    return locationEmails.length ? locationEmails : settings.careersDefaultRecipients;
-  }, [locationId, locations, settings.careersDefaultRecipients]);
+  const resolvedRecipients = useMemo(
+    () => settings.careersDefaultRecipients,
+    [settings.careersDefaultRecipients],
+  );
   const sendEmails = settings.careersSendEmails;
 
   const formIsInvalid =

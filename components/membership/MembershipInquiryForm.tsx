@@ -34,14 +34,12 @@ const LOCATION_OPTIONS = [
 type MembershipInquiryFormProps = {
   firebase: Firebase;
   content: MembershipFormContent;
-  paymentLinkUrl?: string;
   className?: string;
 };
 
 export function MembershipInquiryForm({
   firebase,
   content,
-  paymentLinkUrl,
   className,
 }: MembershipInquiryFormProps) {
   const { settings } = useInquirySettings(firebase);

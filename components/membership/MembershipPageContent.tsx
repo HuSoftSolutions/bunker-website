@@ -145,7 +145,6 @@ export default function MembershipPageContent() {
               <MembershipInquiryForm
                 firebase={firebase}
                 content={membershipContent}
-                paymentLinkUrl={paymentLinkUrl}
               />
             </div>
           </section>

@@ -151,11 +151,11 @@ export default function LocationsPage() {
         imageAlt="The Bunker location interior"
       />
 
-      <div className="mx-auto w-full max-w-6xl px-4 pt-12 pb-8">
+      <div className="mx-auto w-full max-w-full px-4 pt-12 pb-8">
         <NearestLocationBanner locations={orderedLocations} />
       </div>
 
-      <section className="relative mx-auto w-full max-w-6xl px-4 py-16">
+      <section className="relative mx-auto w-full max-w-full px-4 py-16">
         <div className="relative grid gap-8 lg:grid-cols-[1fr_320px] lg:items-start">
           <div className="space-y-8">
             {orderedLocations.map((location) => {

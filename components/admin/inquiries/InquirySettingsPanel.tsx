@@ -421,7 +421,7 @@ export function InquirySettingsPanel({ firebase }: InquirySettingsPanelProps) {
             Inquiry Settings
           </h2>
           <p className="mt-2 text-sm text-white/60">
-            Configure recipients and board layouts for each inquiry type. Location-specific career emails still override the default when present.
+            Configure recipients and board layouts for each inquiry type.
           </p>
         </div>
         <button
