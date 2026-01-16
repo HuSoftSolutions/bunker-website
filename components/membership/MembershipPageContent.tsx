@@ -26,15 +26,10 @@ export default function MembershipPageContent() {
   const firebase = useFirebase();
   const { settings } = useBusinessSettings(firebase);
 
-  const { heroImageUrl, paymentLinkUrl, membershipContent } = useMemo(() => {
+  const { heroImageUrl, membershipContent } = useMemo(() => {
     const configuredHeroUrl =
       typeof settings.membershipHeroImage?.url === "string"
         ? settings.membershipHeroImage.url.trim()
-        : "";
-
-    const configuredPaymentUrl =
-      typeof settings.membershipPaymentUrl === "string" && settings.membershipPaymentUrl.trim().length > 0
-        ? settings.membershipPaymentUrl.trim()
         : "";
 
     const configured = settings.membershipForm ?? null;
@@ -50,12 +45,10 @@ export default function MembershipPageContent() {
 
     return {
       heroImageUrl: configuredHeroUrl || undefined,
-      paymentLinkUrl: configuredPaymentUrl,
       membershipContent: merged,
     };
   }, [
     settings.membershipHeroImage?.url,
-    settings.membershipPaymentUrl,
     settings.membershipForm,
   ]);
 

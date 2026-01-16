@@ -47,6 +47,8 @@ import {
   resolveAdminInquiryReadStateMap,
 } from "@/utils/adminReadState";
 import {
+  buildAdminPageAccessKey,
+  getAdminPageAccess,
   getManagerLocationIds,
   isAdmin,
   isAdminOrManager,
@@ -152,14 +154,44 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
   const { locations } = useLocations(firebase as Firebase);
   const isAdminUser = isAdmin(authUser);
   const isManagerUser = isManager(authUser);
+  const adminPageAccess = useMemo(
+    () => getAdminPageAccess(authUser),
+    [authUser],
+  );
+  const adminAccessSet = useMemo(
+    () => new Set(adminPageAccess),
+    [adminPageAccess],
+  );
   const managerLocationIds = useMemo(
     () => getManagerLocationIds(authUser),
     [authUser],
   );
-  const managerLocationTabs = useMemo(
-    () => new Set(["calendar", "beverages", "sign-tvs"]),
-    [],
-  );
+  const managerLocationTabs = useMemo(() => {
+    if (adminAccessSet.size === 0) {
+      return new Set(["calendar", "beverages", "sign-tvs"]);
+    }
+    const tabs = ADMIN_NAV_ITEMS.filter(
+      (item) =>
+        item.view === "location" &&
+        adminAccessSet.has(buildAdminPageAccessKey(item.view, item.tab)),
+    ).map((item) => item.tab);
+    return tabs.length
+      ? new Set(tabs)
+      : new Set(["calendar", "beverages", "sign-tvs"]);
+  }, [adminAccessSet]);
+  const managerBusinessTabs = useMemo(() => {
+    if (adminAccessSet.size === 0) {
+      return new Set<string>();
+    }
+    const tabs = ADMIN_NAV_ITEMS.filter(
+      (item) =>
+        item.view === "business" &&
+        adminAccessSet.has(buildAdminPageAccessKey(item.view, item.tab)),
+    ).map((item) => item.tab);
+    return new Set(tabs);
+  }, [adminAccessSet]);
+  const managerDefaultLocationTab =
+    Array.from(managerLocationTabs)[0] ?? "calendar";
 
   const displayName = readAuthString(authUser, "displayName") ?? readAuthString(authUser, "name");
   const email = readAuthString(authUser, "email");
@@ -176,13 +208,20 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     }
 
     if (isManagerUser) {
+      if (adminAccessSet.size > 0) {
+        return ADMIN_NAV_ITEMS.filter(
+          (item) =>
+            (item.view === "location" || item.view === "business") &&
+            adminAccessSet.has(buildAdminPageAccessKey(item.view, item.tab)),
+        );
+      }
       return ADMIN_NAV_ITEMS.filter(
         (item) => item.view === "location" && managerLocationTabs.has(item.tab),
       );
     }
 
     return [];
-  }, [isAdminUser, isManagerUser, managerLocationTabs]);
+  }, [adminAccessSet, isAdminUser, isManagerUser, managerLocationTabs]);
 
   const groupedNav = useMemo<AdminNavGroup[]>(() => {
     const groups: AdminNavGroup[] = [];
@@ -283,15 +322,25 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     const params = new URLSearchParams(searchParams?.toString());
     let updated = false;
 
-    if (params.get("view") !== "location") {
-      params.set("view", "location");
-      updated = true;
-    }
+    const view = params.get("view") ?? "location";
+    const currentTab = params.get("tab") ?? "";
+    const hasBusinessAccess = managerBusinessTabs.size > 0;
 
-    const currentTab = params.get("tab");
-    if (!currentTab || !managerLocationTabs.has(currentTab)) {
-      params.set("tab", "calendar");
-      updated = true;
+    if (view === "business") {
+      if (!hasBusinessAccess || !managerBusinessTabs.has(currentTab)) {
+        params.set("view", "location");
+        params.set("tab", managerDefaultLocationTab);
+        updated = true;
+      }
+    } else {
+      if (view !== "location") {
+        params.set("view", "location");
+        updated = true;
+      }
+      if (!currentTab || !managerLocationTabs.has(currentTab)) {
+        params.set("tab", managerDefaultLocationTab);
+        updated = true;
+      }
     }
 
     if (managerLocationIds.length) {
@@ -310,6 +359,8 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
     isManagerUser,
     managerLocationIds,
     managerLocationTabs,
+    managerBusinessTabs,
+    managerDefaultLocationTab,
     pathname,
     router,
     searchParams,
@@ -342,6 +393,7 @@ function AdminScaffold({ children }: { children: React.ReactNode }) {
           activeHref={activeHref}
           locations={scopedLocations}
           selectedLocationId={selectedLocationId}
+          inquiryLocationId={searchParams?.get("inquiryLocationId") ?? ""}
           onLocationChange={handleLocationChange}
           displayName={displayName}
           email={email}
@@ -414,6 +466,7 @@ function AdminSidebar({
   activeHref,
   locations,
   selectedLocationId,
+  inquiryLocationId,
   onLocationChange,
   displayName,
   email,
@@ -427,6 +480,7 @@ function AdminSidebar({
   activeHref: string | null;
   locations: LocationRecord[];
   selectedLocationId?: string;
+  inquiryLocationId?: string;
   onLocationChange?: (locationId: string) => void;
   displayName?: string;
   email?: string;
@@ -574,6 +628,21 @@ function AdminSidebar({
               </div>
             ) : null}
             {group.items.map((item) => {
+              const itemHref =
+                (item.view === "location" || item.view === "business") && selectedLocationId
+                  ? (() => {
+                      const [path, queryString] = item.href.split("?");
+                      const params = new URLSearchParams(queryString ?? "");
+                      if (!params.get("locationId")) {
+                        params.set("locationId", selectedLocationId);
+                      }
+                      if (item.view === "business" && inquiryLocationId) {
+                        params.set("inquiryLocationId", inquiryLocationId);
+                      }
+                      const nextQuery = params.toString();
+                      return nextQuery ? `${path}?${nextQuery}` : path;
+                    })()
+                  : item.href;
               const inquiryKind = inquiryTabMap[item.tab ?? ""];
               const counts = inquiryKind ? inquiryCounts[inquiryKind] : null;
               const total = counts?.total ?? 0;
@@ -584,7 +653,7 @@ function AdminSidebar({
               return (
                 <SidebarItem
                   key={item.href}
-                  href={item.href}
+                  href={itemHref}
                   current={item.href === activeHref}
                   onClick={onNavigate}
                 >

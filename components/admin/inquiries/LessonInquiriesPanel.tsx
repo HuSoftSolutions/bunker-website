@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import type Firebase from "@/lib/firebase/client";
 import { useLessonsInquiries, type LessonsInquiry } from "@/hooks/useLessonsInquiries";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
+import useLocations from "@/hooks/useLocations";
 import {
   DEFAULT_WORKFLOW_STATUS,
   type InquiryWorkflowStatus,
@@ -16,11 +17,18 @@ import { formatPhone } from "@/utils/format";
 import { useAuth } from "@/providers/AuthProvider";
 import { type AdminInquiryKind, resolveAdminInquiryReadState } from "@/utils/adminReadState";
 import {
+  buildInquiryLocationOptions,
+  matchesInquiryLocation,
+  matchesAllowedInquiryLocations,
+} from "@/utils/inquiryLocationFilter";
+import { getManagerLocationIds, isAdmin } from "@/utils/auth";
+import {
   InquiryBoard,
   type InquiryBoardItem,
 } from "./InquiryBoard";
 import { WorkflowControls } from "./WorkflowControls";
 import { arrayRemove, arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const VIEW_MODE_STORAGE_KEY = "admin-lesson-inquiries-view-mode";
 
@@ -205,6 +213,10 @@ type LessonInquiriesPanelProps = {
 };
 
 export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { locations } = useLocations(firebase);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>({ start: "", end: "" });
   const [refreshToken, setRefreshToken] = useState(0);
@@ -213,10 +225,40 @@ export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set<string>());
   const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set<string>());
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const inquiryLocationId = searchParams?.get("inquiryLocationId") ?? "";
+  const { authUser } = useAuth();
+  const locationOptions = useMemo(
+    () => buildInquiryLocationOptions(locations),
+    [locations],
+  );
+  const isAdminUser = isAdmin(authUser);
+  const managerLocationIds = useMemo(
+    () => getManagerLocationIds(authUser),
+    [authUser],
+  );
+  const availableLocationOptions = useMemo(() => {
+    if (isAdminUser) {
+      return locationOptions;
+    }
+    if (!managerLocationIds.length) {
+      return [];
+    }
+    return locationOptions.filter((option) =>
+      managerLocationIds.includes(option.id),
+    );
+  }, [isAdminUser, locationOptions, managerLocationIds]);
+  const selectedLocation = useMemo(
+    () =>
+      inquiryLocationId
+        ? availableLocationOptions.find(
+            (option) => option.id === inquiryLocationId,
+          ) ?? null
+        : null,
+    [availableLocationOptions, inquiryLocationId],
+  );
   const { settings } = useInquirySettings(firebase);
   const boardEnabled = settings.lessonsBoardEnabled;
   const boardStatuses = settings.lessonsBoardStatuses;
-  const { authUser } = useAuth();
   const inquiryKind: AdminInquiryKind = "lesson";
   const userId = typeof authUser?.uid === "string" ? authUser.uid : null;
 
@@ -305,6 +347,16 @@ export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
         }
       }
 
+      if (!matchesInquiryLocation(inquiry.location, selectedLocation)) {
+        return false;
+      }
+      if (
+        !isAdminUser &&
+        !matchesAllowedInquiryLocations(inquiry.location, availableLocationOptions)
+      ) {
+        return false;
+      }
+
       const recordDate = resolveRecordDate(inquiry);
       if (startDateObj && recordDate && recordDate < startDateObj) {
         return false;
@@ -319,7 +371,15 @@ export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
 
       return true;
     });
-  }, [inquiries, normalizedSearch, startDateObj, endDateObj]);
+  }, [
+    inquiries,
+    normalizedSearch,
+    selectedLocation,
+    startDateObj,
+    endDateObj,
+    isAdminUser,
+    availableLocationOptions,
+  ]);
 
   const latestInquiryDate = useMemo(() => {
     return inquiries.reduce<Date | null>((latest, inquiry) => {
@@ -391,7 +451,12 @@ export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
   }, [inquiries, boardStatuses]);
 
   const hasUnread = unreadInquiryIds.size > 0;
-  const isFilterActive = Boolean(searchTerm.trim() || dateRange.start || dateRange.end);
+  const isFilterActive = Boolean(
+    searchTerm.trim() ||
+      dateRange.start ||
+      dateRange.end ||
+      inquiryLocationId,
+  );
 
   const selectedInquiry = useMemo(() => {
     if (!selectedInquiryId) {
@@ -460,7 +525,28 @@ export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
   const handleClearFilters = useCallback(() => {
     setSearchTerm("");
     setDateRange({ start: "", end: "" });
-  }, []);
+    if (!inquiryLocationId) {
+      return;
+    }
+    const params = new URLSearchParams(searchParams?.toString());
+    params.delete("inquiryLocationId");
+    const nextQuery = params.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  }, [inquiryLocationId, pathname, router, searchParams]);
+
+  const handleLocationFilterChange = useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(searchParams?.toString());
+      if (value) {
+        params.set("inquiryLocationId", value);
+      } else {
+        params.delete("inquiryLocationId");
+      }
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
 
   const updateWorkflow = useCallback(
     async (
@@ -595,7 +681,7 @@ export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
               </div>
             </div>
           </div>
-          <div className="mt-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+          <div className="mt-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
             <label className="flex flex-col gap-2 text-xs uppercase tracking-wide text-white/60">
               Search
               <input
@@ -638,6 +724,21 @@ export function LessonInquiriesPanel({ firebase }: LessonInquiriesPanelProps) {
                 />
               </label>
             </div>
+            <label className="flex flex-col gap-2 text-xs uppercase tracking-wide text-white/60">
+              Location
+              <select
+                value={inquiryLocationId}
+                onChange={(event) => handleLocationFilterChange(event.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white focus:border-primary focus:outline-none"
+              >
+                <option value="">All locations</option>
+                {availableLocationOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="flex gap-2 md:justify-end">
               <button
                 type="button"

@@ -39,10 +39,22 @@ export default function SignInPage() {
       await firebase.doSignInWithEmailAndPassword(email.trim(), password);
       router.replace(redirectTo);
     } catch (err) {
-      console.error("[SignIn] failed", err);
-      setError(
-        err instanceof Error ? err.message : "Unable to sign in. Please try again.",
-      );
+      const code =
+        typeof err === "object" && err !== null && "code" in err
+          ? String((err as { code?: unknown }).code)
+          : "";
+      if (code && code !== "auth/wrong-password") {
+        console.error("[SignIn] failed", err);
+      }
+      if (code === "auth/wrong-password" || code === "auth/user-not-found") {
+        setError("Invalid email or password.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Too many attempts. Try again in a few minutes.");
+      } else {
+        setError(
+          err instanceof Error ? err.message : "Unable to sign in. Please try again.",
+        );
+      }
     } finally {
       setLoading(false);
     }

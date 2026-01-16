@@ -33,7 +33,12 @@ import useLocations, { mergeLocationRecord } from "@/hooks/useLocations";
 import type Firebase from "@/lib/firebase/client";
 import { useFirebase } from "@/providers/FirebaseProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { getManagerLocationIds, isAdmin, isManager } from "@/utils/auth";
+import {
+  getAdminPageAccess,
+  getManagerLocationIds,
+  isAdmin,
+  isManager,
+} from "@/utils/auth";
 import { Button } from "@/ui-kit/button";
 import { Badge } from "@/ui-kit/badge";
 import { Checkbox, CheckboxField } from "@/ui-kit/checkbox";
@@ -1025,10 +1030,40 @@ export default function LocationsAdminPage() {
   const noticeInfoState = useNoticeInfoAdminState(firebase);
   const isAdminUser = isAdmin(authUser);
   const isManagerUser = isManager(authUser);
+  const adminPageAccess = useMemo(
+    () => getAdminPageAccess(authUser),
+    [authUser],
+  );
+  const adminAccessSet = useMemo(
+    () => new Set(adminPageAccess),
+    [adminPageAccess],
+  );
   const managerLocationIds = useMemo(
     () => getManagerLocationIds(authUser),
     [authUser],
   );
+  const managerLocationTabs = useMemo(() => {
+    if (adminAccessSet.size === 0) {
+      return new Set<AdminTab>(["calendar", "beverages", "sign-tvs"]);
+    }
+    const tabs = Array.from(adminAccessSet)
+      .filter((entry) => entry.startsWith("location:"))
+      .map((entry) => entry.split(":")[1])
+      .filter(Boolean) as AdminTab[];
+    return tabs.length
+      ? new Set(tabs)
+      : new Set<AdminTab>(["calendar", "beverages", "sign-tvs"]);
+  }, [adminAccessSet]);
+  const managerBusinessTabs = useMemo(() => {
+    if (adminAccessSet.size === 0) {
+      return new Set<BusinessTab>();
+    }
+    const tabs = Array.from(adminAccessSet)
+      .filter((entry) => entry.startsWith("business:"))
+      .map((entry) => entry.split(":")[1])
+      .filter(Boolean) as BusinessTab[];
+    return new Set(tabs);
+  }, [adminAccessSet]);
 
   const [adminView, setAdminView] = useState<"business" | "location">("location");
   const [businessTab, setBusinessTab] = useState<BusinessTab>("settings");
@@ -1060,8 +1095,11 @@ export default function LocationsAdminPage() {
     const tabParam = searchParams?.get("tab");
     const locationIdParam = searchParams?.get("locationId");
     const isManagerRestricted = isManagerUser && !isAdminUser;
+    const managerAllowsBusiness = managerBusinessTabs.size > 0;
     const resolvedView = isManagerRestricted
-      ? "location"
+      ? viewParam === "business" && managerAllowsBusiness
+        ? "business"
+        : "location"
       : viewParam === "business"
         ? "business"
         : viewParam === "location"
@@ -1074,22 +1112,24 @@ export default function LocationsAdminPage() {
       setAdminView("location");
     }
 
-    const allowedTabs: BusinessTab[] = [
-      "settings",
-      "franchise-inquiries",
-      "career-inquiries",
-      "lesson-inquiries",
-      "league-inquiries",
-      "membership-inquiries",
-      "fitting-inquiries",
-      "fittings",
-      "lessons",
-      "junior-golf",
-      "inquiry-settings",
-    ];
+    const allowedTabs: BusinessTab[] = isManagerRestricted && adminAccessSet.size > 0
+      ? (Array.from(managerBusinessTabs) as BusinessTab[])
+      : [
+          "settings",
+          "franchise-inquiries",
+          "career-inquiries",
+          "lesson-inquiries",
+          "league-inquiries",
+          "membership-inquiries",
+          "fitting-inquiries",
+          "fittings",
+          "lessons",
+          "junior-golf",
+          "inquiry-settings",
+        ];
 
     const allowedLocationTabs: AdminTab[] = isManagerRestricted
-      ? ["calendar", "beverages", "sign-tvs"]
+      ? (Array.from(managerLocationTabs) as AdminTab[])
       : [
           "general",
           "menus",
@@ -1103,7 +1143,7 @@ export default function LocationsAdminPage() {
 
     if (!tabParam) {
       if (isManagerRestricted) {
-        setActiveTab("calendar");
+        setActiveTab((Array.from(managerLocationTabs)[0] ?? "calendar") as AdminTab);
       }
       return;
     }
@@ -1118,7 +1158,7 @@ export default function LocationsAdminPage() {
     if (allowedLocationTabs.includes(tabParam as AdminTab)) {
       setActiveTab(tabParam as AdminTab);
     } else if (isManagerRestricted) {
-      setActiveTab("calendar");
+      setActiveTab((Array.from(managerLocationTabs)[0] ?? "calendar") as AdminTab);
     }
 
     if (locationIdParam && locationIdParam !== selectedLocationId) {
@@ -1126,8 +1166,11 @@ export default function LocationsAdminPage() {
     }
   }, [
     adminView,
+    adminAccessSet,
     isAdminUser,
     isManagerUser,
+    managerBusinessTabs,
+    managerLocationTabs,
     searchParams,
     selectedLocationId,
   ]);

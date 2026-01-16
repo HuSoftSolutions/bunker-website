@@ -55,3 +55,28 @@ export const getManagerLocationIds = (
   });
   return Array.from(unique);
 };
+
+export const getAdminPageAccess = (
+  authUser: Record<string, unknown> | null,
+) => {
+  if (!authUser || typeof authUser !== "object") {
+    return [];
+  }
+  const value =
+    authUser["adminPageAccess"] ??
+    authUser["pageAccess"] ??
+    authUser["adminPages"];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const unique = new Set<string>();
+  value.forEach((entry) => {
+    if (typeof entry === "string" && entry.trim()) {
+      unique.add(entry.trim());
+    }
+  });
+  return Array.from(unique);
+};
+
+export const buildAdminPageAccessKey = (view: string, tab: string) =>
+  `${view}:${tab}`;

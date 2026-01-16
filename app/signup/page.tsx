@@ -13,6 +13,7 @@ type InvitePayload = {
   email: string;
   role: "ADMIN" | "MANAGER";
   managerLocationIds: string[];
+  adminPageAccess?: string[];
   status?: string;
 };
 
@@ -53,6 +54,11 @@ export default function SignUpPage() {
           role: data.role === "ADMIN" ? "ADMIN" : "MANAGER",
           managerLocationIds: Array.isArray(data.managerLocationIds)
             ? data.managerLocationIds.filter(
+                (entry: unknown): entry is string => typeof entry === "string",
+              )
+            : [],
+          adminPageAccess: Array.isArray(data.adminPageAccess)
+            ? data.adminPageAccess.filter(
                 (entry: unknown): entry is string => typeof entry === "string",
               )
             : [],
@@ -118,6 +124,8 @@ export default function SignUpPage() {
           },
           managerLocationIds:
             invite.role === "MANAGER" ? invite.managerLocationIds : [],
+          adminPageAccess:
+            invite.role === "MANAGER" ? invite.adminPageAccess ?? [] : [],
           createdAt: serverTimestamp(),
         },
         { merge: true },

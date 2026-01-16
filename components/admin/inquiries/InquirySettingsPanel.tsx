@@ -526,7 +526,7 @@ export function InquirySettingsPanel({ firebase }: InquirySettingsPanelProps) {
               ) : null}
               {boardStatusesValue.map((status, index) => (
                 <div
-                  key={`${status}-${index}`}
+                  key={index}
                   className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2"
                   draggable={boardEnabledValue}
                   onDragStart={() => setDraggedStatusIndex(index)}
