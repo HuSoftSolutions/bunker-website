@@ -73,6 +73,7 @@ export function MembershipInquiryForm({
   const [notes, setNotes] = useState("");
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [submittedMembershipType, setSubmittedMembershipType] = useState("");
+  const [submittedPaymentUrl, setSubmittedPaymentUrl] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const submitGuardRef = useRef(false);
@@ -169,6 +170,7 @@ export function MembershipInquiryForm({
       resetForm();
       setPaymentModalOpen(true);
       setSubmittedMembershipType(submittedType);
+      setSubmittedPaymentUrl(resolvePaymentUrl(submittedType));
       toast.success(content.successTitle);
     } catch (error) {
       console.error("[MembershipInquiryForm] submit failed", error);
@@ -186,15 +188,18 @@ export function MembershipInquiryForm({
     typeof businessSettings.membershipPaymentLinks === "object"
       ? businessSettings.membershipPaymentLinks
       : {};
-  const typePaymentUrl =
-    submittedMembershipType && typeof paymentLinks[submittedMembershipType] === "string"
-      ? paymentLinks[submittedMembershipType].trim()
-      : "";
-  const paymentUrl =
-    typePaymentUrl ||
-    (typeof businessSettings.membershipPaymentUrl === "string"
-      ? businessSettings.membershipPaymentUrl.trim()
-      : "");
+  const resolvePaymentUrl = (typeValue: string) => {
+    const typePaymentUrl =
+      typeValue && typeof paymentLinks[typeValue] === "string"
+        ? paymentLinks[typeValue].trim()
+        : "";
+    const defaultUrl =
+      typeof businessSettings.membershipPaymentUrl === "string"
+        ? businessSettings.membershipPaymentUrl.trim()
+        : "";
+    return typePaymentUrl || defaultUrl;
+  };
+  const paymentUrl = submittedPaymentUrl || resolvePaymentUrl(submittedMembershipType);
 
   return (
     <form onSubmit={handleSubmit} className={className}>
@@ -350,11 +355,26 @@ export function MembershipInquiryForm({
         </div>
       </FormCard>
 
+      {paymentUrl ? (
+        <div className="mt-4 text-center text-xs uppercase tracking-wide text-white/60">
+          Need to pay?{" "}
+          <a
+            href={paymentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Complete payment
+          </a>
+        </div>
+      ) : null}
+
       <Dialog
         open={paymentModalOpen}
         onClose={() => {
           setPaymentModalOpen(false);
           setSubmittedMembershipType("");
+          setSubmittedPaymentUrl("");
         }}
         size="lg"
       >
