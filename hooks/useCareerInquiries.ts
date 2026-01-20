@@ -46,6 +46,7 @@ export type UseCareerInquiriesValue = {
 
 type UseCareerInquiriesOptions = {
   refreshToken?: number;
+  includeArchived?: boolean;
 };
 
 function timestampToDate(value: unknown) {
@@ -78,6 +79,7 @@ export function useCareerInquiries(
   const [error, setError] = useState<Error | null>(null);
   const [records, setRecords] = useState<CareerInquiry[]>([]);
   const refreshToken = options.refreshToken ?? 0;
+  const includeArchived = options.includeArchived ?? false;
 
   useEffect(() => {
     if (!firebase) {
@@ -125,7 +127,7 @@ export function useCareerInquiries(
           } satisfies CareerInquiry;
         });
 
-        setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
+        setRecords(includeArchived ? inquiries : inquiries.filter((inquiry) => !inquiry.archivedAt));
         setLoading(false);
       },
       (err: unknown) => {
@@ -137,7 +139,7 @@ export function useCareerInquiries(
     );
 
     return () => off();
-  }, [firebase, refreshToken]);
+  }, [firebase, includeArchived, refreshToken]);
 
   return useMemo(
     () => ({ inquiries: records, loading, error }),

@@ -33,6 +33,13 @@ export type MembershipInquiry = {
   archivedAtDate?: Date | null;
   workflowStatus: InquiryWorkflowStatus;
   workflowAssignedTo: string;
+  convertedMemberId?: string | null;
+  convertedAt?: string | null;
+  convertedAtDate?: Date | null;
+  membershipPaidAt?: string | null;
+  membershipPaidAtDate?: Date | null;
+  membershipExpiresAt?: string | null;
+  membershipExpiresAtDate?: Date | null;
 };
 
 export type UseMembershipInquiriesValue = {
@@ -43,6 +50,7 @@ export type UseMembershipInquiriesValue = {
 
 type UseMembershipInquiriesOptions = {
   refreshToken?: number;
+  includeArchived?: boolean;
 };
 
 function timestampToDate(value: unknown) {
@@ -54,6 +62,16 @@ function timestampToDate(value: unknown) {
     }
   }
   return null;
+}
+
+function resolveDateValue(value: unknown) {
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  return timestampToDate(value);
 }
 
 function normalizeEmails(value: unknown): string[] {
@@ -75,6 +93,7 @@ export function useMembershipInquiries(
   const [error, setError] = useState<Error | null>(null);
   const [records, setRecords] = useState<MembershipInquiry[]>([]);
   const refreshToken = options.refreshToken ?? 0;
+  const includeArchived = options.includeArchived ?? false;
 
   useEffect(() => {
     if (!firebase) {
@@ -97,6 +116,9 @@ export function useMembershipInquiries(
             (typeof createTime?.toDate === "function" ? createTime.toDate() : null);
           const workflow = parseWorkflowFromData(data);
           const archive = resolveArchiveState(data.archivedAt);
+          const convertedAtDate = resolveDateValue(data.convertedAt);
+          const membershipPaidAtDate = resolveDateValue(data.membershipPaidAt);
+          const membershipExpiresAtDate = resolveDateValue(data.membershipExpiresAt);
 
           return {
             inquiryId: doc.id,
@@ -114,10 +136,21 @@ export function useMembershipInquiries(
             archivedAtDate: archive.archivedAtDate,
             workflowStatus: workflow.status ?? DEFAULT_WORKFLOW_STATUS,
             workflowAssignedTo: workflow.assignedTo ?? "",
+            convertedMemberId:
+              typeof data.convertedMemberId === "string" ? data.convertedMemberId : null,
+            convertedAt:
+              typeof data.convertedAt === "string" ? data.convertedAt : null,
+            convertedAtDate,
+            membershipPaidAt:
+              typeof data.membershipPaidAt === "string" ? data.membershipPaidAt : null,
+            membershipPaidAtDate,
+            membershipExpiresAt:
+              typeof data.membershipExpiresAt === "string" ? data.membershipExpiresAt : null,
+            membershipExpiresAtDate,
           } satisfies MembershipInquiry;
         });
 
-        setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
+        setRecords(includeArchived ? inquiries : inquiries.filter((inquiry) => !inquiry.archivedAt));
         setLoading(false);
       },
       (err: unknown) => {
@@ -129,7 +162,7 @@ export function useMembershipInquiries(
     );
 
     return () => off();
-  }, [firebase, refreshToken]);
+  }, [firebase, includeArchived, refreshToken]);
 
   return useMemo(
     () => ({ inquiries: records, loading, error }),

@@ -26,8 +26,7 @@ import {
   InquiryBoard,
   type InquiryBoardItem,
 } from "./InquiryBoard";
-import { WorkflowControls } from "./WorkflowControls";
-import { arrayRemove, arrayUnion, doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { addDoc, arrayRemove, arrayUnion, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const VIEW_MODE_STORAGE_KEY = "admin-membership-inquiries-view-mode";
@@ -59,16 +58,30 @@ function formatDateForDisplay(dateValue: Date | null | undefined) {
   }
 }
 
+function formatDateForInput(dateValue: Date | null | undefined) {
+  if (!dateValue || Number.isNaN(dateValue.getTime())) {
+    return "";
+  }
+  try {
+    return format(dateValue, "yyyy-MM-dd");
+  } catch (error) {
+    console.warn("[MembershipInquiries] failed to format input date", error);
+    return "";
+  }
+}
+
 type InquiryDrawerProps = {
   inquiry: MembershipInquiry | null;
   onClose: () => void;
   onMarkRead: (inquiryId: string) => void;
   onMarkUnread: (inquiryId: string) => void;
   onArchive: (inquiryId: string) => void;
+  onConvert: (inquiryId: string) => void;
   isUnread: boolean;
   workflowState: Record<string, InquiryWorkflowEntry>;
   onStatusChange: (inquiryId: string, status: InquiryWorkflowStatus) => void;
-  onAssigneeChange: (inquiryId: string, assignee: string) => void;
+  onPaidDateChange: (inquiryId: string, dateValue: string) => void;
+  onExpiresDateChange: (inquiryId: string, dateValue: string) => void;
   boardStatuses: string[];
 };
 
@@ -83,16 +96,96 @@ function DrawerField({ label, children }: { label: string; children: React.React
   );
 }
 
+type MembershipStatusControlsProps = {
+  inquiryId: string;
+  entry: InquiryWorkflowEntry;
+  onStatusChange: (inquiryId: string, status: InquiryWorkflowStatus) => void;
+  onPaidDateChange: (inquiryId: string, dateValue: string) => void;
+  onExpiresDateChange: (inquiryId: string, dateValue: string) => void;
+  paidDateValue: string;
+  expiresDateValue: string;
+  layout?: "stacked" | "inline";
+  statuses?: string[];
+};
+
+function MembershipStatusControls({
+  inquiryId,
+  entry,
+  onStatusChange,
+  onPaidDateChange,
+  onExpiresDateChange,
+  paidDateValue,
+  expiresDateValue,
+  layout = "stacked",
+  statuses,
+}: MembershipStatusControlsProps) {
+  const options = statuses?.length ? statuses : [DEFAULT_WORKFLOW_STATUS];
+  const resolvedStatus = options.includes(entry.status) ? entry.status : options[0];
+  const stopPropagation = (event: React.SyntheticEvent) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <div
+      className={clsx(
+        "gap-3",
+        layout === "inline"
+          ? "flex flex-col sm:flex-row sm:items-center sm:justify-between"
+          : "flex flex-col",
+      )}
+    >
+      <label className="flex flex-col gap-1 text-[11px] uppercase tracking-wide text-white/60">
+        Status
+        <select
+          value={resolvedStatus}
+          onChange={(event) => onStatusChange(inquiryId, event.target.value)}
+          onClick={stopPropagation}
+          disabled={!statuses?.length}
+          className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white shadow-inner focus:border-primary focus:outline-none"
+        >
+          {options.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-[11px] uppercase tracking-wide text-white/60">
+        Membership Paid
+        <input
+          type="date"
+          value={paidDateValue}
+          onChange={(event) => onPaidDateChange(inquiryId, event.target.value)}
+          onClick={stopPropagation}
+          className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white shadow-inner focus:border-primary focus:outline-none"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-[11px] uppercase tracking-wide text-white/60">
+        Membership Expires
+        <input
+          type="date"
+          value={expiresDateValue}
+          onChange={(event) => onExpiresDateChange(inquiryId, event.target.value)}
+          onClick={stopPropagation}
+          className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white shadow-inner focus:border-primary focus:outline-none"
+        />
+      </label>
+    </div>
+  );
+}
+
 function InquiryDrawer({
   inquiry,
   onClose,
   onMarkRead,
   onMarkUnread,
   onArchive,
+  onConvert,
   isUnread,
   workflowState,
   onStatusChange,
-  onAssigneeChange,
+  onPaidDateChange,
+  onExpiresDateChange,
   boardStatuses,
 }: InquiryDrawerProps) {
   if (!inquiry) {
@@ -140,6 +233,19 @@ function InquiryDrawer({
             )}
             <button
               type="button"
+              onClick={() => onConvert(inquiry.inquiryId)}
+              disabled={Boolean(inquiry.convertedMemberId)}
+              className={clsx(
+                "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
+                inquiry.convertedMemberId
+                  ? "cursor-not-allowed border-white/10 text-white/40"
+                  : "border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10",
+              )}
+            >
+              {inquiry.convertedMemberId ? "Converted" : "Convert to Member"}
+            </button>
+            <button
+              type="button"
               onClick={() => onArchive(inquiry.inquiryId)}
               className="rounded-full border border-red-500/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-200 transition hover:bg-red-500/10"
             >
@@ -156,21 +262,24 @@ function InquiryDrawer({
         </div>
 
         <div className="mt-4">
-          <WorkflowControls
+          <MembershipStatusControls
             inquiryId={inquiry.inquiryId}
             entry={workflowEntry}
             onStatusChange={onStatusChange}
-            onAssigneeChange={onAssigneeChange}
+            onPaidDateChange={onPaidDateChange}
+            onExpiresDateChange={onExpiresDateChange}
+            paidDateValue={formatDateForInput(inquiry.membershipPaidAtDate)}
+            expiresDateValue={formatDateForInput(inquiry.membershipExpiresAtDate)}
             layout="inline"
             statuses={boardStatuses}
           />
-          <p className="mt-2 text-xs uppercase tracking-wide text-white/50">
-            Current owner: {workflowEntry.assignedTo || "Unassigned"}
-          </p>
         </div>
 
         <div className="mt-6 grid gap-3">
           <DrawerField label="Inquiry ID">{inquiry.inquiryId}</DrawerField>
+          <DrawerField label="Member Record">
+            {inquiry.convertedMemberId ? inquiry.convertedMemberId : "Not converted"}
+          </DrawerField>
           <DrawerField label="Recipient Name">{inquiry.recipientName || "—"}</DrawerField>
           <DrawerField label="Full Name">{inquiry.fullName || "—"}</DrawerField>
           <DrawerField label="Email">
@@ -195,6 +304,16 @@ function InquiryDrawer({
           </DrawerField>
           <DrawerField label="Primary Location">{inquiry.primaryLocation || "—"}</DrawerField>
           <DrawerField label="Membership Type">{inquiry.membershipType || "—"}</DrawerField>
+          <DrawerField label="Membership Paid">
+            {inquiry.membershipPaidAtDate
+              ? formatDateForDisplay(inquiry.membershipPaidAtDate)
+              : "—"}
+          </DrawerField>
+          <DrawerField label="Membership Expires">
+            {inquiry.membershipExpiresAtDate
+              ? formatDateForDisplay(inquiry.membershipExpiresAtDate)
+              : "—"}
+          </DrawerField>
           <DrawerField label="Referred By">{inquiry.referredBy || "—"}</DrawerField>
           <DrawerField label="Recipients">
             <span className="text-white/80">
@@ -227,11 +346,19 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set<string>());
   const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set<string>());
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [showArchived, setShowArchived] = useState(false);
   const inquiryLocationId = searchParams?.get("inquiryLocationId") ?? "";
   const { authUser } = useAuth();
   const locationOptions = useMemo(
     () => buildInquiryLocationOptions(locations),
     [locations],
+  );
+  const resolveInquiryLocation = useCallback(
+    (primaryLocation: string) =>
+      locationOptions.find((option) =>
+        matchesInquiryLocation(primaryLocation, option),
+      ) ?? null,
+    [locationOptions],
   );
   const isAdminUser = isAdmin(authUser);
   const managerLocationIds = useMemo(
@@ -320,7 +447,10 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
     }
   }, [boardEnabled, viewMode]);
 
-  const { inquiries, loading, error } = useMembershipInquiries(firebase, { refreshToken });
+  const { inquiries, loading, error } = useMembershipInquiries(firebase, {
+    refreshToken,
+    includeArchived: showArchived,
+  });
 
   const normalizedSearch = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
 
@@ -587,11 +717,32 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
     [updateWorkflow],
   );
 
-  const handleAssigneeChange = useCallback(
-    (inquiryId: string, assignee: string) => {
-      updateWorkflow(inquiryId, { assignedTo: assignee });
+  const handleMembershipPaidChange = useCallback(
+    async (inquiryId: string, dateValue: string) => {
+      try {
+        await updateDoc(
+          doc(firebase.membershipInquiriesRef(), inquiryId),
+          { membershipPaidAt: dateValue ? dateValue : null },
+        );
+      } catch (error) {
+        console.error("[MembershipInquiries] failed to update membership paid date", error);
+      }
     },
-    [updateWorkflow],
+    [firebase],
+  );
+
+  const handleMembershipExpiresChange = useCallback(
+    async (inquiryId: string, dateValue: string) => {
+      try {
+        await updateDoc(
+          doc(firebase.membershipInquiriesRef(), inquiryId),
+          { membershipExpiresAt: dateValue ? dateValue : null },
+        );
+      } catch (error) {
+        console.error("[MembershipInquiries] failed to update membership expires date", error);
+      }
+    },
+    [firebase],
   );
 
   const handleArchiveInquiry = useCallback(
@@ -610,6 +761,55 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
       }
     },
     [firebase],
+  );
+
+  const handleConvertInquiry = useCallback(
+    async (inquiryId: string) => {
+      const inquiry = inquiries.find((item) => item.inquiryId === inquiryId);
+      if (!inquiry) {
+        return;
+      }
+
+      if (inquiry.convertedMemberId) {
+        return;
+      }
+
+      if (!window.confirm("Convert this inquiry into a member record? The inquiry will be archived.")) {
+        return;
+      }
+
+      const locationMatch = resolveInquiryLocation(inquiry.primaryLocation);
+
+      try {
+        const memberRef = await addDoc(firebase.membersRef(), {
+          fullName: inquiry.fullName,
+          recipientName: inquiry.recipientName,
+          email: inquiry.email,
+          phone: inquiry.phone,
+          primaryLocation: inquiry.primaryLocation,
+          primaryLocationId: locationMatch?.id ?? null,
+          membershipType: inquiry.membershipType,
+          referredBy: inquiry.referredBy ?? null,
+          notes: inquiry.notes ?? null,
+          inquiryId: inquiry.inquiryId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        await updateDoc(
+          doc(firebase.membershipInquiriesRef(), inquiryId),
+          {
+            archivedAt: new Date().toISOString(),
+            convertedAt: new Date().toISOString(),
+            convertedMemberId: memberRef.id,
+          },
+        );
+        setSelectedInquiryId(null);
+      } catch (error) {
+        console.error("[MembershipInquiries] failed to convert inquiry", error);
+      }
+    },
+    [firebase, inquiries, resolveInquiryLocation],
   );
 
   return (
@@ -651,6 +851,18 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
                 )}
               >
                 Mark all read
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowArchived((prev) => !prev)}
+                className={clsx(
+                  "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
+                  showArchived
+                    ? "border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/10"
+                    : "border-white/20 text-white/70 hover:bg-white/10",
+                )}
+              >
+                {showArchived ? "Hide archived" : "Show archived"}
               </button>
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1">
                 <button
@@ -771,19 +983,36 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
             <EmptyState hasFilters={isFilterActive} />
           ) : viewMode === "board" ? (
             boardStatuses.length ? (
-              <InquiryBoard
-                items={boardItems}
-                workflowState={workflowState}
+        <InquiryBoard
+          items={boardItems}
+          workflowState={workflowState}
+          onStatusChange={handleStatusChange}
+          onAssigneeChange={() => {}}
+          onMarkRead={handleMarkInquiryRead}
+          allowedStatuses={boardStatuses}
+          lane="status"
+          renderControls={(item, entry) => {
+            const inquiry =
+              inquiries.find((candidate) => candidate.inquiryId === item.id) ?? null;
+            return (
+              <MembershipStatusControls
+                inquiryId={item.id}
+                entry={entry}
                 onStatusChange={handleStatusChange}
-                onAssigneeChange={handleAssigneeChange}
-                onMarkRead={handleMarkInquiryRead}
-                allowedStatuses={boardStatuses}
-                lane="status"
-                onOpen={(inquiryId) => {
-                  setSelectedInquiryId(inquiryId);
-                  handleMarkInquiryRead(inquiryId);
-                }}
+                onPaidDateChange={handleMembershipPaidChange}
+                onExpiresDateChange={handleMembershipExpiresChange}
+                paidDateValue={formatDateForInput(inquiry?.membershipPaidAtDate)}
+                expiresDateValue={formatDateForInput(inquiry?.membershipExpiresAtDate)}
+                statuses={boardStatuses}
               />
+            );
+          }}
+          showAssigneeMeta={false}
+          onOpen={(inquiryId) => {
+            setSelectedInquiryId(inquiryId);
+            handleMarkInquiryRead(inquiryId);
+          }}
+        />
             ) : (
               <div className="rounded-2xl border border-white/10 bg-black/30 px-6 py-10 text-center text-sm text-white/60">
                 No board columns are selected. Update Inquiry Settings to choose columns.
@@ -798,7 +1027,8 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
               onMarkRead={handleMarkInquiryRead}
               workflowState={workflowState}
               onStatusChange={handleStatusChange}
-              onAssigneeChange={handleAssigneeChange}
+              onPaidDateChange={handleMembershipPaidChange}
+              onExpiresDateChange={handleMembershipExpiresChange}
               boardStatuses={boardStatuses}
             />
           )}
@@ -811,10 +1041,12 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
         onMarkRead={handleMarkInquiryRead}
         onMarkUnread={handleMarkInquiryUnread}
         onArchive={handleArchiveInquiry}
+        onConvert={handleConvertInquiry}
         isUnread={selectedInquiry ? unreadInquiryIds.has(selectedInquiry.inquiryId) : false}
         workflowState={workflowState}
         onStatusChange={handleStatusChange}
-        onAssigneeChange={handleAssigneeChange}
+        onPaidDateChange={handleMembershipPaidChange}
+        onExpiresDateChange={handleMembershipExpiresChange}
         boardStatuses={boardStatuses}
       />
     </div>
@@ -875,7 +1107,8 @@ type InquiryTableProps = {
   onMarkRead: (inquiryId: string) => void;
   workflowState: Record<string, InquiryWorkflowEntry>;
   onStatusChange: (inquiryId: string, status: InquiryWorkflowStatus) => void;
-  onAssigneeChange: (inquiryId: string, assignee: string) => void;
+  onPaidDateChange: (inquiryId: string, dateValue: string) => void;
+  onExpiresDateChange: (inquiryId: string, dateValue: string) => void;
   boardStatuses: string[];
 };
 
@@ -887,7 +1120,8 @@ function InquiryTable({
   onMarkRead,
   workflowState,
   onStatusChange,
-  onAssigneeChange,
+  onPaidDateChange,
+  onExpiresDateChange,
   boardStatuses,
 }: InquiryTableProps) {
   return (
@@ -900,7 +1134,7 @@ function InquiryTable({
             <th className="px-4 py-3 font-medium">Location</th>
             <th className="px-4 py-3 font-medium">Membership</th>
             <th className="px-4 py-3 font-medium">Referral</th>
-            <th className="px-4 py-3 font-medium">Workflow</th>
+            <th className="px-4 py-3 font-medium">Membership</th>
             <th className="px-4 py-3 font-medium">Submitted</th>
           </tr>
         </thead>
@@ -951,7 +1185,7 @@ function InquiryTable({
                   {inquiry.referredBy || "—"}
                 </td>
                 <td className="px-4 py-3">
-                  <WorkflowControls
+                  <MembershipStatusControls
                     inquiryId={inquiry.inquiryId}
                     entry={
                       workflowState[inquiry.inquiryId] ?? {
@@ -960,7 +1194,10 @@ function InquiryTable({
                       }
                     }
                     onStatusChange={onStatusChange}
-                    onAssigneeChange={onAssigneeChange}
+                    onPaidDateChange={onPaidDateChange}
+                    onExpiresDateChange={onExpiresDateChange}
+                    paidDateValue={formatDateForInput(inquiry.membershipPaidAtDate)}
+                    expiresDateValue={formatDateForInput(inquiry.membershipExpiresAtDate)}
                     statuses={boardStatuses}
                   />
                 </td>

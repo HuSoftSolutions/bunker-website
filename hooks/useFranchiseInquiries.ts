@@ -40,6 +40,7 @@ export type FranchiseInquiry = {
 type UseFranchiseInquiriesOptions = {
   franchiseSite?: string;
   refreshToken?: number;
+  includeArchived?: boolean;
 };
 
 export type UseFranchiseInquiriesValue = {
@@ -58,6 +59,7 @@ export function useFranchiseInquiries(
 
   const franchiseSite = options.franchiseSite ?? "franchise-website";
   const refreshToken = options.refreshToken ?? 0;
+  const includeArchived = options.includeArchived ?? false;
 
   useEffect(() => {
     if (!firebase) {
@@ -123,7 +125,7 @@ export function useFranchiseInquiries(
           } satisfies FranchiseInquiry;
         });
 
-          setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
+          setRecords(includeArchived ? inquiries : inquiries.filter((inquiry) => !inquiry.archivedAt));
           setLoading(false);
         },
         (err: unknown) => {
@@ -137,7 +139,7 @@ export function useFranchiseInquiries(
     return () => {
       off();
     };
-  }, [firebase, franchiseSite, refreshToken]);
+  }, [firebase, franchiseSite, includeArchived, refreshToken]);
 
   return useMemo(
     () => ({

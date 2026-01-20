@@ -18,6 +18,7 @@ import {
 } from "@/components/admin/inquiries/LessonInquiriesPanel";
 import { LeagueInquiriesPanel } from "@/components/admin/inquiries/LeagueInquiriesPanel";
 import { MembershipInquiriesPanel } from "@/components/admin/inquiries/MembershipInquiriesPanel";
+import { MembersPanel } from "@/components/admin/members/MembersPanel";
 import { LocationMap } from "@/components/maps/LocationMap";
 import { JuniorGolfSettingsPanel } from "@/components/admin/juniorGolf/JuniorGolfSettingsPanel";
 import { FittingsSettingsPanel } from "@/components/admin/fittings/FittingsSettingsPanel";
@@ -28,6 +29,7 @@ import {
 	FALLBACK_LOCATIONS,
 	FALLBACK_LOCATION_MAP,
 } from "@/data/locationConfig";
+import type { LocationRecord } from "@/data/locationConfig";
 import { DEFAULT_MEMBERSHIP_CONTENT, type MembershipFormContent } from "@/data/membershipContent";
 import useLocations, { mergeLocationRecord } from "@/hooks/useLocations";
 import type Firebase from "@/lib/firebase/client";
@@ -88,10 +90,12 @@ type AdminTab =
   | "ordering"
   | "map"
   | "calendar"
-  | "sign-tvs";
+  | "sign-tvs"
+  | "members";
 
 type BusinessTab =
   | "settings"
+  | "members"
   | "franchise-inquiries"
   | "career-inquiries"
   | "lesson-inquiries"
@@ -148,6 +152,7 @@ type BusinessSettingsFormState = {
   teesheetUrl?: string;
   membershipRegistrationUrl?: string;
   membershipPaymentUrl?: string;
+  membershipPaymentLinks?: Record<string, string> | null;
   membershipHeroImage?: MembershipHeroImage | null;
   membershipForm?: MembershipFormContent | null;
 };
@@ -156,6 +161,7 @@ const BUSINESS_DEFAULT_STATE: BusinessSettingsFormState = {
   teesheetUrl: "",
   membershipRegistrationUrl: "",
   membershipPaymentUrl: "",
+  membershipPaymentLinks: {},
   membershipHeroImage: null,
   membershipForm: { ...DEFAULT_MEMBERSHIP_CONTENT },
 };
@@ -175,6 +181,10 @@ const cloneBusinessSettingsState = (
       membershipHeroImage: parsed?.membershipHeroImage
         ? { ...parsed.membershipHeroImage }
         : null,
+      membershipPaymentLinks:
+        parsed?.membershipPaymentLinks && typeof parsed.membershipPaymentLinks === "object"
+          ? { ...(parsed.membershipPaymentLinks as Record<string, string>) }
+          : {},
       membershipForm: parsed?.membershipForm
         ? {
             ...DEFAULT_MEMBERSHIP_CONTENT,
@@ -190,6 +200,10 @@ const cloneBusinessSettingsState = (
       membershipHeroImage: value?.membershipHeroImage
         ? { ...value.membershipHeroImage }
         : null,
+      membershipPaymentLinks:
+        value?.membershipPaymentLinks && typeof value.membershipPaymentLinks === "object"
+          ? { ...(value.membershipPaymentLinks as Record<string, string>) }
+          : {},
       membershipForm: value?.membershipForm
         ? {
             ...DEFAULT_MEMBERSHIP_CONTENT,
@@ -278,6 +292,27 @@ function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
       : fallback;
 
   const rawMembershipForm = form?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT;
+  const membershipTypes = sanitizeList(
+    rawMembershipForm.membershipTypes,
+    [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes],
+  );
+  const rawPaymentLinks =
+    form?.membershipPaymentLinks && typeof form.membershipPaymentLinks === "object"
+      ? (form.membershipPaymentLinks as Record<string, unknown>)
+      : null;
+  if (rawPaymentLinks) {
+    const cleanedLinks: Record<string, string> = {};
+    membershipTypes.forEach((type) => {
+      const candidate = rawPaymentLinks[type];
+      if (typeof candidate === "string" && candidate.trim()) {
+        cleanedLinks[type] = candidate.trim();
+      }
+    });
+    payload.membershipPaymentLinks =
+      Object.keys(cleanedLinks).length > 0 ? cleanedLinks : null;
+  } else {
+    payload.membershipPaymentLinks = null;
+  }
   payload.membershipForm = {
     formTitle: sanitizeText(rawMembershipForm.formTitle, DEFAULT_MEMBERSHIP_CONTENT.formTitle),
     formDescription: sanitizeText(
@@ -300,10 +335,7 @@ function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
       rawMembershipForm.membershipTypeLabel,
       DEFAULT_MEMBERSHIP_CONTENT.membershipTypeLabel,
     ),
-    membershipTypes: sanitizeList(
-      rawMembershipForm.membershipTypes,
-      [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes],
-    ),
+    membershipTypes,
     successTitle: sanitizeText(
       rawMembershipForm.successTitle,
       DEFAULT_MEMBERSHIP_CONTENT.successTitle,
@@ -475,6 +507,10 @@ function useBusinessSettingsAdminState(firebase: Firebase): BusinessAdminState {
             typeof data?.membershipPaymentUrl === "string"
               ? data.membershipPaymentUrl
               : "";
+          const membershipPaymentLinks =
+            data?.membershipPaymentLinks && typeof data.membershipPaymentLinks === "object"
+              ? (data.membershipPaymentLinks as Record<string, string>)
+              : {};
           const heroImageData =
             data?.membershipHeroImage && typeof data.membershipHeroImage === "object"
               ? {
@@ -496,6 +532,7 @@ function useBusinessSettingsAdminState(firebase: Firebase): BusinessAdminState {
             teesheetUrl,
             membershipRegistrationUrl,
             membershipPaymentUrl,
+            membershipPaymentLinks,
             membershipHeroImage: heroImageData && heroImageData.url ? heroImageData : null,
             membershipForm: {
               ...DEFAULT_MEMBERSHIP_CONTENT,
@@ -1116,6 +1153,7 @@ export default function LocationsAdminPage() {
       ? (Array.from(managerBusinessTabs) as BusinessTab[])
       : [
           "settings",
+          "members",
           "franchise-inquiries",
           "career-inquiries",
           "lesson-inquiries",
@@ -1139,6 +1177,7 @@ export default function LocationsAdminPage() {
           "ordering",
           "map",
           "sign-tvs",
+          "members",
         ];
 
     if (!tabParam) {
@@ -1322,6 +1361,14 @@ export default function LocationsAdminPage() {
             <MembershipInquiriesPanel firebase={firebase} />
           ) : null}
 
+          {businessTab === "members" ? (
+            <MembersPanel
+              firebase={firebase}
+              locations={locations}
+              scope="all"
+            />
+          ) : null}
+
           {businessTab === "fitting-inquiries" ? (
             <FittingInquiriesPanel firebase={firebase} />
           ) : null}
@@ -1362,6 +1409,7 @@ export default function LocationsAdminPage() {
                 firebase={firebase}
                 canManageTvs={isAdminUser}
                 calendarState={calendarState}
+                locations={scopedLocations}
                 defaultLocationName={
                   typeof form?.name === "string"
                     ? form.name
@@ -1417,6 +1465,7 @@ function BusinessSettingsPanel({
   });
   const heroInputId = useId();
   const membershipForm = form?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT;
+  const membershipPaymentLinks = form?.membershipPaymentLinks ?? {};
 
   const listToText = (value: string[]) => value.join("\n");
   const textToList = (value: string) =>
@@ -1454,6 +1503,19 @@ function BusinessSettingsPanel({
       setForm((prev) => ({
         ...(prev ?? {}),
         membershipPaymentUrl: value,
+      }));
+    },
+    [setForm],
+  );
+
+  const handlePaymentLinkOverrideChange = useCallback(
+    (membershipType: string, value: string) => {
+      setForm((prev) => ({
+        ...(prev ?? {}),
+        membershipPaymentLinks: {
+          ...(prev?.membershipPaymentLinks ?? {}),
+          [membershipType]: value,
+        },
       }));
     },
     [setForm],
@@ -1627,6 +1689,30 @@ function BusinessSettingsPanel({
                 disabled={loading}
               />
             </FormField>
+
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                Payment links by membership type
+              </Subheading>
+              <Text className="text-xs text-white/60">
+                Optional overrides for each membership type. If empty, the default payment link is used.
+              </Text>
+              <div className="space-y-4">
+                {membershipForm.membershipTypes.map((type) => (
+                  <FormField key={type} label={type}>
+                    <Input
+                      type="url"
+                      inputMode="url"
+                      autoComplete="off"
+                      placeholder="https://example.com/checkout"
+                      value={membershipPaymentLinks[type] ?? ""}
+                      onChange={(event) => handlePaymentLinkOverrideChange(type, event.target.value)}
+                      disabled={loading}
+                    />
+                  </FormField>
+                ))}
+              </div>
+            </div>
 
             <div className="space-y-4">
               <div className="space-y-2">
@@ -2072,6 +2158,7 @@ function TabContent({
   firebase,
   canManageTvs,
   calendarState,
+  locations,
   defaultLocationName,
 }: {
   tab: AdminTab;
@@ -2083,6 +2170,7 @@ function TabContent({
   firebase: Firebase;
   canManageTvs: boolean;
   calendarState: CalendarAdminState;
+  locations: LocationRecord[];
   defaultLocationName: string;
 }) {
   const handleInputChange = useCallback(
@@ -2097,6 +2185,7 @@ function TabContent({
 
   const isCalendarTab = tab === "calendar";
   const isBeveragesTab = tab === "beverages";
+  const isMembersTab = tab === "members";
   const isCalendarLoading = isCalendarTab ? calendarState.loading : false;
   const activeSaving = isCalendarTab ? calendarState.saving : saving;
   const handleSave = isCalendarTab ? calendarState.save : onSave;
@@ -2104,7 +2193,7 @@ function TabContent({
 
   return (
     <div className="space-y-6">
-      {!isBeveragesTab ? (
+      {!isBeveragesTab && !isMembersTab ? (
         <div className="flex flex-wrap items-center gap-3">
           <Button
             color="red"
@@ -2187,6 +2276,16 @@ function TabContent({
           canManageBusinessGraphics={false}
           canManageLocationGraphics
           onChangeSignTvs={(next) => handleInputChange("signTvs", next)}
+        />
+      ) : null}
+
+      {tab === "members" ? (
+        <MembersPanel
+          firebase={firebase}
+          locations={locations}
+          scope="location"
+          locationId={resolveStringValue(form.id)}
+          locationName={resolveStringValue(form.name, defaultLocationName ?? "")}
         />
       ) : null}
 

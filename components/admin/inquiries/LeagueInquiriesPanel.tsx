@@ -223,6 +223,7 @@ export function LeagueInquiriesPanel({ firebase }: LeagueInquiriesPanelProps) {
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set<string>());
   const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set<string>());
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [showArchived, setShowArchived] = useState(false);
   const inquiryLocationId = searchParams?.get("inquiryLocationId") ?? "";
   const { authUser } = useAuth();
   const locationOptions = useMemo(
@@ -316,7 +317,10 @@ export function LeagueInquiriesPanel({ firebase }: LeagueInquiriesPanelProps) {
     }
   }, [boardEnabled, viewMode]);
 
-  const { inquiries, loading, error } = useLeaguesInquiries(firebase, { refreshToken });
+  const { inquiries, loading, error } = useLeaguesInquiries(firebase, {
+    refreshToken,
+    includeArchived: showArchived,
+  });
 
   const normalizedSearch = useMemo(() => searchTerm.trim().toLowerCase(), [searchTerm]);
 
@@ -648,6 +652,18 @@ export function LeagueInquiriesPanel({ firebase }: LeagueInquiriesPanelProps) {
                 )}
               >
                 Mark all read
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowArchived((prev) => !prev)}
+                className={clsx(
+                  "rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition",
+                  showArchived
+                    ? "border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/10"
+                    : "border-white/20 text-white/70 hover:bg-white/10",
+                )}
+              >
+                {showArchived ? "Hide archived" : "Show archived"}
               </button>
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1">
                 <button

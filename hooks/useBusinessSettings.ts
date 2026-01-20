@@ -9,6 +9,7 @@ export type BusinessSettings = {
   teesheetUrl?: string | null;
   membershipRegistrationUrl?: string | null;
   membershipPaymentUrl?: string | null;
+  membershipPaymentLinks?: Record<string, string> | null;
   membershipHeroImage?: {
     url: string;
     storagePath?: string | null;
@@ -20,6 +21,7 @@ const DEFAULT_SETTINGS: BusinessSettings = {
   teesheetUrl: null,
   membershipRegistrationUrl: null,
   membershipPaymentUrl: null,
+  membershipPaymentLinks: null,
   membershipHeroImage: null,
   membershipForm: null,
 };

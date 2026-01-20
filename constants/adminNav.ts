@@ -58,11 +58,25 @@ export const ADMIN_NAV_ITEMS = [
     tab: "map",
   },
   {
+    href: `${LOCATION_ADMIN}?view=location&tab=members`,
+    label: "Location Members",
+    section: "Locations",
+    view: "location",
+    tab: "members",
+  },
+  {
     href: `${LOCATION_ADMIN}?view=business&tab=settings`,
     label: "Business Settings",
     section: "Business",
     view: "business",
     tab: "settings",
+  },
+  {
+    href: `${LOCATION_ADMIN}?view=business&tab=members`,
+    label: "Members",
+    section: "Business",
+    view: "business",
+    tab: "members",
   },
   {
     href: `${LOCATION_ADMIN}?view=business&tab=fittings`,

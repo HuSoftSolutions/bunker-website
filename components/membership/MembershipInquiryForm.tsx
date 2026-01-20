@@ -6,8 +6,16 @@ import { addDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "react-toastify";
 import type Firebase from "@/lib/firebase/client";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
+import useBusinessSettings from "@/hooks/useBusinessSettings";
 import type { MembershipFormContent } from "@/data/membershipContent";
 import { Button } from "@/components/ui/Button";
+import {
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogDescription,
+  DialogTitle,
+} from "@/ui-kit/dialog";
 import {
   Field,
   FormCard,
@@ -43,6 +51,7 @@ export function MembershipInquiryForm({
   className,
 }: MembershipInquiryFormProps) {
   const { settings } = useInquirySettings(firebase);
+  const { settings: businessSettings } = useBusinessSettings(firebase);
   const recipients = useMemo(
     () => settings.membershipsDefaultRecipients,
     [settings.membershipsDefaultRecipients],
@@ -62,6 +71,8 @@ export function MembershipInquiryForm({
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [submittedMembershipType, setSubmittedMembershipType] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const submitGuardRef = useRef(false);
@@ -154,7 +165,10 @@ export function MembershipInquiryForm({
         }
       }
 
+      const submittedType = membershipType.trim();
       resetForm();
+      setPaymentModalOpen(true);
+      setSubmittedMembershipType(submittedType);
       toast.success(content.successTitle);
     } catch (error) {
       console.error("[MembershipInquiryForm] submit failed", error);
@@ -166,6 +180,21 @@ export function MembershipInquiryForm({
       setSubmitting(false);
     }
   };
+
+  const paymentLinks =
+    businessSettings.membershipPaymentLinks &&
+    typeof businessSettings.membershipPaymentLinks === "object"
+      ? businessSettings.membershipPaymentLinks
+      : {};
+  const typePaymentUrl =
+    submittedMembershipType && typeof paymentLinks[submittedMembershipType] === "string"
+      ? paymentLinks[submittedMembershipType].trim()
+      : "";
+  const paymentUrl =
+    typePaymentUrl ||
+    (typeof businessSettings.membershipPaymentUrl === "string"
+      ? businessSettings.membershipPaymentUrl.trim()
+      : "");
 
   return (
     <form onSubmit={handleSubmit} className={className}>
@@ -320,6 +349,46 @@ export function MembershipInquiryForm({
           </Button>
         </div>
       </FormCard>
+
+      <Dialog
+        open={paymentModalOpen}
+        onClose={() => {
+          setPaymentModalOpen(false);
+          setSubmittedMembershipType("");
+        }}
+        size="lg"
+      >
+        <DialogTitle>{content.successTitle}</DialogTitle>
+        <DialogDescription>{content.successMessage}</DialogDescription>
+        <DialogBody>
+          {paymentUrl ? (
+            <div className="space-y-3">
+              <p className="text-sm text-white/70">
+                Complete payment to finalize your membership.
+              </p>
+              <Button href={paymentUrl} target="_blank" rel="noreferrer">
+                {content.paymentLinkLabel}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-white/70">
+              A team member will share the payment link shortly.
+            </p>
+          )}
+        </DialogBody>
+        <DialogActions>
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => {
+              setPaymentModalOpen(false);
+              setSubmittedMembershipType("");
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </form>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import type React from "react";
 import { format } from "date-fns";
 import {
   DEFAULT_WORKFLOW_STATUS,
@@ -45,6 +46,8 @@ type InquiryBoardProps = {
   onMarkRead?: (inquiryId: string) => void;
   lane?: InquiryBoardLaneId;
   allowedStatuses?: InquiryWorkflowStatus[];
+  renderControls?: (item: InquiryBoardItem, entry: InquiryWorkflowEntry) => React.ReactNode;
+  showAssigneeMeta?: boolean;
 };
 
 export function InquiryBoard({
@@ -56,7 +59,11 @@ export function InquiryBoard({
   onMarkRead,
   lane = "status",
   allowedStatuses,
+  renderControls,
+  showAssigneeMeta,
 }: InquiryBoardProps) {
+  const shouldShowAssigneeMeta =
+    typeof showAssigneeMeta === "boolean" ? showAssigneeMeta : !renderControls;
   const laneLabel = INQUIRY_BOARD_LANE_LABELS[lane] ?? "Workflow status";
   const resolveLaneValue = (item: InquiryBoardItem, entry: InquiryWorkflowEntry) => {
     if (lane === "status") {
@@ -202,16 +209,20 @@ export function InquiryBoard({
                       ) : null}
 
                       <div className="mt-3">
-                        <WorkflowControls
-                          inquiryId={item.id}
-                          entry={entry}
-                          onStatusChange={onStatusChange}
-                          onAssigneeChange={onAssigneeChange}
-                          statuses={allowedStatuses}
-                        />
+                        {renderControls ? (
+                          renderControls(item, entry)
+                        ) : (
+                          <WorkflowControls
+                            inquiryId={item.id}
+                            entry={entry}
+                            onStatusChange={onStatusChange}
+                            onAssigneeChange={onAssigneeChange}
+                            statuses={allowedStatuses}
+                          />
+                        )}
                       </div>
 
-                      {onOpen ? (
+                      {onOpen && shouldShowAssigneeMeta ? (
                         <div className="mt-3 flex items-center justify-between">
                           <span className="text-[11px] uppercase tracking-wide text-white/50">
                             Assigned: {entry.assignedTo || "—"}

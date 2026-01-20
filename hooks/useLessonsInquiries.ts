@@ -41,6 +41,7 @@ export type UseLessonsInquiriesValue = {
 
 type UseLessonsInquiriesOptions = {
   refreshToken?: number;
+  includeArchived?: boolean;
 };
 
 function timestampToDate(value: unknown) {
@@ -73,6 +74,7 @@ export function useLessonsInquiries(
   const [error, setError] = useState<Error | null>(null);
   const [records, setRecords] = useState<LessonsInquiry[]>([]);
   const refreshToken = options.refreshToken ?? 0;
+  const includeArchived = options.includeArchived ?? false;
 
   useEffect(() => {
     if (!firebase) {
@@ -113,7 +115,7 @@ export function useLessonsInquiries(
           } satisfies LessonsInquiry;
         });
 
-        setRecords(inquiries.filter((inquiry) => !inquiry.archivedAt));
+        setRecords(includeArchived ? inquiries : inquiries.filter((inquiry) => !inquiry.archivedAt));
         setLoading(false);
       },
       (err: unknown) => {
@@ -125,7 +127,7 @@ export function useLessonsInquiries(
     );
 
     return () => off();
-  }, [firebase, refreshToken]);
+  }, [firebase, includeArchived, refreshToken]);
 
   return useMemo(
     () => ({ inquiries: records, loading, error }),

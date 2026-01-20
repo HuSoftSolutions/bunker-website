@@ -210,6 +210,12 @@ class Firebase {
   membershipInquiriesRef = () =>
     collection(this.db, "inquiries/memberships/submissions");
 
+  membersRef = (): CollectionReference<DocumentData> =>
+    collection(this.db, "members");
+
+  memberRef = (id: string): DocumentReference<DocumentData> =>
+    doc(this.db, `members/${id}`);
+
   eventsInquiriesRef = () =>
     collection(this.db, "inquiries/events/submissions");
 
