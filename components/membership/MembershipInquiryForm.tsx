@@ -169,7 +169,7 @@ export function MembershipInquiryForm({
 
   return (
     <form onSubmit={handleSubmit} className={className}>
-      <FormCard>
+      <FormCard className="border border-white/10 bg-zinc-900/70">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary/70">
             Membership
