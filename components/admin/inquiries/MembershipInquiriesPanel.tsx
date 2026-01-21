@@ -791,6 +791,8 @@ export function MembershipInquiriesPanel({ firebase }: MembershipInquiriesPanelP
           membershipType: inquiry.membershipType,
           referredBy: inquiry.referredBy ?? null,
           notes: inquiry.notes ?? null,
+          membershipPaidAt: inquiry.membershipPaidAt ?? null,
+          membershipExpiresAt: inquiry.membershipExpiresAt ?? null,
           inquiryId: inquiry.inquiryId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),

@@ -47,6 +47,8 @@ type MemberFormState = {
   membershipType: string;
   referredBy: string;
   notes: string;
+  membershipPaidAt: string;
+  membershipExpiresAt: string;
 };
 
 const EMAIL_REGEX =
@@ -77,6 +79,8 @@ const createEmptyDraft = (
   membershipType: "",
   referredBy: "",
   notes: "",
+  membershipPaidAt: "",
+  membershipExpiresAt: "",
 });
 
 export function MembersPanel({
@@ -158,6 +162,7 @@ export function MembersPanel({
         member.phone,
         member.primaryLocation,
         member.membershipType,
+        member.referredBy,
       ]
         .filter(Boolean)
         .join(" ")
@@ -198,6 +203,8 @@ export function MembersPanel({
       membershipType: member.membershipType ?? "",
       referredBy: member.referredBy ?? "",
       notes: member.notes ?? "",
+      membershipPaidAt: member.membershipPaidAt ?? "",
+      membershipExpiresAt: member.membershipExpiresAt ?? "",
     });
     setFormError(null);
     setDialogOpen(true);
@@ -257,6 +264,8 @@ export function MembersPanel({
       membershipType: draft.membershipType.trim(),
       referredBy: draft.referredBy.trim() || null,
       notes: draft.notes.trim() || null,
+      membershipPaidAt: draft.membershipPaidAt.trim() || null,
+      membershipExpiresAt: draft.membershipExpiresAt.trim() || null,
       updatedAt: serverTimestamp(),
     };
 
@@ -403,6 +412,9 @@ export function MembersPanel({
                   <TableHeader>Contact</TableHeader>
                   <TableHeader>Location</TableHeader>
                   <TableHeader>Membership</TableHeader>
+                  <TableHeader>Referral</TableHeader>
+                  <TableHeader>Paid</TableHeader>
+                  <TableHeader>Expires</TableHeader>
                   <TableHeader>Updated</TableHeader>
                   <TableHeader className="text-right">Actions</TableHeader>
                 </TableRow>
@@ -427,6 +439,15 @@ export function MembersPanel({
                     </TableCell>
                     <TableCell className="text-white/70">
                       {member.membershipType || "—"}
+                    </TableCell>
+                    <TableCell className="text-white/70">
+                      {member.referredBy || "—"}
+                    </TableCell>
+                    <TableCell className="text-white/60">
+                      {formatDateForDisplay(member.membershipPaidAtDate)}
+                    </TableCell>
+                    <TableCell className="text-white/60">
+                      {formatDateForDisplay(member.membershipExpiresAtDate)}
                     </TableCell>
                     <TableCell className="text-white/60">
                       {formatDateForDisplay(member.updatedAtDate || member.createdAtDate)}
@@ -531,6 +552,24 @@ export function MembersPanel({
                   type="text"
                   value={draft.referredBy}
                   onChange={(event) => updateDraft("referredBy", event.target.value)}
+                />
+              </Field>
+
+              <Field>
+                <Label>Membership paid</Label>
+                <Input
+                  type="date"
+                  value={draft.membershipPaidAt}
+                  onChange={(event) => updateDraft("membershipPaidAt", event.target.value)}
+                />
+              </Field>
+
+              <Field>
+                <Label>Membership expires</Label>
+                <Input
+                  type="date"
+                  value={draft.membershipExpiresAt}
+                  onChange={(event) => updateDraft("membershipExpiresAt", event.target.value)}
                 />
               </Field>
 

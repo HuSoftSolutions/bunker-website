@@ -23,6 +23,10 @@ export type MemberRecord = {
   referredBy?: string | null;
   notes?: string | null;
   inquiryId?: string | null;
+  membershipPaidAt?: string | null;
+  membershipPaidAtDate?: Date | null;
+  membershipExpiresAt?: string | null;
+  membershipExpiresAtDate?: Date | null;
   createdAtDate?: Date | null;
   updatedAtDate?: Date | null;
 };
@@ -42,6 +46,16 @@ function timestampToDate(value: unknown) {
     }
   }
   return null;
+}
+
+function resolveDateValue(value: unknown) {
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  return timestampToDate(value);
 }
 
 export function useMembers(firebase: Firebase | null): UseMembersValue {
@@ -72,6 +86,8 @@ export function useMembers(firebase: Firebase | null): UseMembersValue {
           const updatedAtDate =
             timestampToDate(data.updatedAt) ??
             (typeof updateTime?.toDate === "function" ? updateTime.toDate() : null);
+          const membershipPaidAtDate = resolveDateValue(data.membershipPaidAt);
+          const membershipExpiresAtDate = resolveDateValue(data.membershipExpiresAt);
 
           return {
             memberId: doc.id,
@@ -88,6 +104,12 @@ export function useMembers(firebase: Firebase | null): UseMembersValue {
             referredBy: typeof data.referredBy === "string" ? data.referredBy : null,
             notes: typeof data.notes === "string" ? data.notes : null,
             inquiryId: typeof data.inquiryId === "string" ? data.inquiryId : null,
+            membershipPaidAt:
+              typeof data.membershipPaidAt === "string" ? data.membershipPaidAt : null,
+            membershipPaidAtDate,
+            membershipExpiresAt:
+              typeof data.membershipExpiresAt === "string" ? data.membershipExpiresAt : null,
+            membershipExpiresAtDate,
             createdAtDate,
             updatedAtDate,
           } satisfies MemberRecord;
