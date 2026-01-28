@@ -9,6 +9,7 @@ import { NearestLocationBanner } from "@/components/location/NearestLocationBann
 import { LocationMap } from "@/components/maps/LocationMap";
 import { VirtualTourModal } from "@/components/location/VirtualTourModal";
 import type { VirtualTourSelection } from "@/components/location/VirtualTourModal";
+import { NoticeBanner } from "@/components/landing/NoticeBanner";
 import { MenuModal, type MenuModalLocation } from "@/components/menus/MenuModal";
 import { Button } from "@/components/ui/Button";
 import type { LocationRecord } from "@/data/locationConfig";
@@ -184,6 +185,11 @@ export default function LocationsPage() {
               const menus = resolveMenuEntries(location.menus);
               const amenities = resolveAmenities(location.amenities);
               const coords = resolveRecordValue(location.coordinates);
+              const notice = resolveRecordValue(location.notice);
+              const noticeTitle = resolveStringValue(notice?.title);
+              const noticeMessage = resolveStringValue(notice?.message);
+              const noticeLink = resolveStringValue(notice?.link);
+              const noticeLinkText = resolveStringValue(notice?.linkText);
               const lat = typeof coords?.lat === "number" ? coords.lat : null;
               const lng = typeof coords?.lng === "number" ? coords.lng : null;
               const virtualTourUrl = resolveStringValue(location.virtualTourUrl);
@@ -209,6 +215,15 @@ export default function LocationsPage() {
                         No image available!
                       </div>
                     )}
+                    {notice?.showNoticeMsg ? (
+                      <NoticeBanner
+                        title={noticeTitle}
+                        message={noticeMessage}
+                        link={noticeLink}
+                        linkText={noticeLinkText}
+                        className="absolute inset-x-0 bottom-0 bg-primary/90"
+                      />
+                    ) : null}
                   </div>
 
                   <div className="space-y-5 px-6 py-6">
