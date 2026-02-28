@@ -155,11 +155,4 @@ export const ADMIN_NAV_ITEMS = [
     view: "admin",
     tab: "users",
   },
-  {
-    href: SIGN_TVS_ADMIN,
-    label: "Sign TVs",
-    section: "Admin",
-    view: "admin",
-    tab: "sign-tvs",
-  },
 ] as const;

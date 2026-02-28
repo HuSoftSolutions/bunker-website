@@ -5,11 +5,12 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { collection, doc, onSnapshot } from "firebase/firestore";
-import type Firebase from "@/lib/firebase/client";
 import { SignTvTicker } from "@/components/signTv/SignTvTicker";
 import { SIGN_TV_BUSINESS_ID } from "@/constants/routes";
+import { SIGNTV_USER_ID } from "@/constants/signTv";
 import useWindowDimensions from "@/hooks/useWindowDimensions";
-import { useFirebase } from "@/providers/FirebaseProvider";
+import { useSignTvFirebase } from "@/providers/SignTvFirebaseProvider";
+import type SignTvFirebase from "@/lib/firebase/signTvClient";
 
 const THEME_CLASSES: Record<string, string> = {
   blue: "bg-slate-800 text-white",
@@ -27,28 +28,11 @@ type SignTvSettings = {
   backgroundColor?: "light" | "dark" | "red" | "blue";
 };
 
-type SignTv = {
-  id: string;
-  name?: string;
-  tickerText?: string;
-  settings?: SignTvSettings;
-};
-
 type SignTvGraphic = {
   id: string;
   url: string;
   hidden?: boolean;
-  tvIds?: string[];
-  applyToAll?: boolean;
-};
-
-type BusinessSignTvGraphic = {
-  id: string;
-  url: string;
-  hidden?: boolean;
-  locationIds?: string[];
-  applyToAllLocations?: boolean;
-  locationTvIds?: Record<string, string[]>;
+  locations?: string[];
 };
 
 const resolveStringValue = (value: unknown, fallback = "") =>
@@ -71,29 +55,33 @@ type SignTvParams = {
 };
 
 export default function SignTvPage() {
-  const firebase = useFirebase() as Firebase;
+  const firebase = useSignTvFirebase() as SignTvFirebase;
   const { width, height } = useWindowDimensions();
   const [location, setLocation] = useState<Record<string, unknown> | null>(null);
   const [graphics, setGraphics] = useState<SignTvGraphic[]>([]);
-  const [businessGraphics, setBusinessGraphics] = useState<BusinessSignTvGraphic[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const params = useParams<SignTvParams>();
   const businessParam =
     typeof params?.businessId === "string" ? params.businessId : "";
-  const locationId =
-    typeof params?.locationId === "string" ? params.locationId : "";
   const tvId = typeof params?.tvId === "string" ? params.tvId : "";
   const businessId = SIGN_TV_BUSINESS_ID;
+  const signTvUserId = SIGNTV_USER_ID;
 
   useEffect(() => {
-    if (!locationId) {
+    if (!tvId || !signTvUserId) {
       return undefined;
     }
 
     setLoading(true);
-    const locationRef = doc(firebase.db, "locations", locationId);
+    const locationRef = doc(
+      firebase.db,
+      "users",
+      signTvUserId,
+      "locations",
+      tvId,
+    );
     const unsubscribe = onSnapshot(
       locationRef,
       (snapshot) => {
@@ -107,19 +95,19 @@ export default function SignTvPage() {
     );
 
     return () => unsubscribe();
-  }, [firebase.db, locationId]);
+  }, [firebase.db, signTvUserId, tvId]);
 
   useEffect(() => {
-    if (!locationId) {
+    if (!tvId || !signTvUserId) {
       setGraphics([]);
       return undefined;
     }
 
     const graphicsRef = collection(
       firebase.db,
-      "locations",
-      locationId,
-      "signTvGraphics",
+      "users",
+      signTvUserId,
+      "images",
     );
 
     const unsubscribe = onSnapshot(graphicsRef, (snapshot) => {
@@ -129,8 +117,7 @@ export default function SignTvPage() {
           id: docSnap.id,
           url: resolveStringValue(data?.url),
           hidden: Boolean(data?.hidden),
-          tvIds: Array.isArray(data?.tvIds) ? data.tvIds : [],
-          applyToAll: Boolean(data?.applyToAll),
+          locations: Array.isArray(data?.locations) ? data.locations : [],
         } satisfies SignTvGraphic;
       });
 
@@ -138,125 +125,36 @@ export default function SignTvPage() {
     });
 
     return () => unsubscribe();
-  }, [firebase.db, locationId]);
-
-  useEffect(() => {
-    if (!businessId || businessParam !== businessId) {
-      setBusinessGraphics([]);
-      return undefined;
-    }
-
-    const graphicsRef = collection(
-      firebase.db,
-      "signTvBusinesses",
-      businessId,
-      "graphics",
-    );
-
-    const unsubscribe = onSnapshot(graphicsRef, (snapshot) => {
-      const next = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          url: resolveStringValue(data?.url),
-          hidden: Boolean(data?.hidden),
-          locationIds: Array.isArray(data?.locationIds) ? data.locationIds : [],
-          applyToAllLocations: Boolean(data?.applyToAllLocations),
-          locationTvIds:
-            data?.locationTvIds && typeof data.locationTvIds === "object"
-              ? (data.locationTvIds as Record<string, string[]>)
-              : {},
-        } satisfies BusinessSignTvGraphic;
-      });
-
-      setBusinessGraphics(next);
-    });
-
-    return () => unsubscribe();
-  }, [businessId, businessParam, firebase.db]);
-
-  const signTvs = useMemo(() => {
-    if (!location || !Array.isArray(location.signTvs)) {
-      return [];
-    }
-
-    return location.signTvs
-      .filter(
-        (entry): entry is SignTv =>
-          Boolean(entry) && typeof entry === "object" && "id" in entry,
-      )
-      .map((entry) => ({
-        id: resolveStringValue(entry.id),
-        name: resolveStringValue(entry.name),
-        tickerText: resolveStringValue(entry.tickerText),
-        settings: entry.settings as SignTvSettings | undefined,
-      }))
-      .filter((entry) => entry.id);
-  }, [location]);
-
-  const activeTv = useMemo(
-    () => signTvs.find((tv) => tv.id === tvId) ?? null,
-    [signTvs, tvId],
-  );
+  }, [firebase.db, signTvUserId, tvId]);
 
   const settings = useMemo(
-    () => resolveSignTvSettings(activeTv?.settings),
-    [activeTv?.settings],
+    () => resolveSignTvSettings((location?.tvSettings ?? {}) as SignTvSettings),
+    [location],
   );
 
   const tickerText =
-    resolveStringValue(activeTv?.tickerText) ||
-    resolveStringValue(location?.signTvTickerText) ||
-    resolveStringValue(location?.tickerText);
+    resolveStringValue(location?.tickerText) ||
+    resolveStringValue(location?.signTvTickerText);
 
   const businessMatches = !location ? true : businessParam === businessId;
 
   const visibleGraphics = useMemo(() => {
-    const locationUrls = graphics
+    return graphics
       .filter((graphic) => {
         if (!graphic.url || graphic.hidden) {
           return false;
         }
 
-        if (graphic.applyToAll) {
-          return true;
-        }
-
-        return Array.isArray(graphic.tvIds) && graphic.tvIds.includes(tvId);
-      })
-      .map((graphic) => graphic.url);
-
-    const businessUrls = businessGraphics
-      .filter((graphic) => {
-        if (!graphic.url || graphic.hidden) {
+        if (!tvId) {
           return false;
         }
 
-        const assignments =
-          graphic.locationTvIds &&
-          typeof graphic.locationTvIds === "object" &&
-          Object.prototype.hasOwnProperty.call(graphic.locationTvIds, locationId)
-            ? graphic.locationTvIds[locationId]
-            : null;
-
-        if (Array.isArray(assignments)) {
-          return assignments.includes(tvId);
-        }
-
-        if (
-          graphic.applyToAllLocations ||
-          (Array.isArray(graphic.locationIds) &&
-            graphic.locationIds.includes(locationId))
-        ) {
-          return signTvs.some((tv) => tv.id === tvId);
-        }
-
-        return false;
+        return Array.isArray(graphic.locations)
+          ? graphic.locations.includes(tvId)
+          : false;
       })
       .map((graphic) => graphic.url);
-
-    return [...locationUrls, ...businessUrls];
-  }, [businessGraphics, graphics, locationId, signTvs, tvId]);
+  }, [graphics, tvId]);
 
   useEffect(() => {
     if (visibleGraphics.length <= 1) {
@@ -284,7 +182,7 @@ export default function SignTvPage() {
     );
   }
 
-  if (!location || !activeTv || !businessMatches) {
+  if (!location || !businessMatches || !signTvUserId) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-white">
         Sign TV not found.

@@ -24,7 +24,7 @@ import { JuniorGolfSettingsPanel } from "@/components/admin/juniorGolf/JuniorGol
 import { FittingsSettingsPanel } from "@/components/admin/fittings/FittingsSettingsPanel";
 import { LessonsSettingsPanel } from "@/components/admin/lessons/LessonsSettingsPanel";
 import { BeverageMenusTab } from "@/components/admin/beverageMenus/BeverageMenusTab";
-import { SignTvManager } from "@/components/admin/signTv/SignTvManager";
+import { SignTvPanel } from "@/components/admin/signTv/SignTvPanel";
 import {
 	FALLBACK_LOCATIONS,
 	FALLBACK_LOCATION_MAP,
@@ -34,6 +34,7 @@ import { DEFAULT_MEMBERSHIP_CONTENT, type MembershipFormContent } from "@/data/m
 import useLocations, { mergeLocationRecord } from "@/hooks/useLocations";
 import type Firebase from "@/lib/firebase/client";
 import { useFirebase } from "@/providers/FirebaseProvider";
+import { useSignTvFirebase } from "@/providers/SignTvFirebaseProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import {
   getAdminPageAccess,
@@ -55,6 +56,7 @@ import { Description, Field, Label } from "@/ui-kit/fieldset";
 import { Heading, Subheading } from "@/ui-kit/heading";
 import { Input } from "@/ui-kit/input";
 import { Switch, SwitchField } from "@/ui-kit/switch";
+import { Select } from "@/ui-kit/select";
 import {
   Table,
   TableBody,
@@ -79,7 +81,7 @@ import {
 	type SetStateAction,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { onSnapshot, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 
 type AdminTab =
@@ -2183,6 +2185,8 @@ function TabContent({
     [setForm],
   );
 
+  const signTvFirebase = useSignTvFirebase();
+
   const isCalendarTab = tab === "calendar";
   const isBeveragesTab = tab === "beverages";
   const isMembersTab = tab === "members";
@@ -2266,17 +2270,19 @@ function TabContent({
       ) : null}
 
       {tab === "sign-tvs" ? (
-        <SignTvManager
-          firebase={firebase}
-          locationId={resolveStringValue(form.id)}
-          locationName={resolveStringValue(form.name, defaultLocationName ?? "")}
-          signTvs={Array.isArray(form.signTvs) ? form.signTvs : []}
-          mode="location"
-          canManageTvs={canManageTvs}
-          canManageBusinessGraphics={false}
-          canManageLocationGraphics
-          onChangeSignTvs={(next) => handleInputChange("signTvs", next)}
-        />
+        canManageTvs ? (
+          <SignTvPanel
+            firebase={signTvFirebase}
+            locationId={resolveStringValue(form.id)}
+            locationName={resolveStringValue(form.name, defaultLocationName ?? "")}
+          />
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-zinc-950/70 p-6 text-center">
+            <Text className="text-white/70">
+              You do not have permission to manage Sign TVs.
+            </Text>
+          </div>
+        )
       ) : null}
 
       {tab === "members" ? (
