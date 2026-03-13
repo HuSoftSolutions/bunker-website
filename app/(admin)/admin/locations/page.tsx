@@ -44,7 +44,7 @@ import {
 } from "@/utils/auth";
 import { Button } from "@/ui-kit/button";
 import { Badge } from "@/ui-kit/badge";
-import { Checkbox, CheckboxField } from "@/ui-kit/checkbox";
+import { CheckboxField } from "@/ui-kit/checkbox";
 import {
   Dialog,
   DialogActions,
@@ -2996,9 +2996,14 @@ function CalendarTab({
             </div>
 
             <CheckboxField className="mt-4">
-              <Checkbox
-                checked={draft.showOnFeed}
-                onChange={(value) => handleDraftChange("showOnFeed", value)}
+              <input
+                type="checkbox"
+                checked={Boolean(draft.showOnFeed)}
+                onChange={(event) =>
+                  handleDraftChange("showOnFeed", event.target.checked)
+                }
+                className="mt-1 h-4 w-4 rounded border border-white/30 bg-black/20 accent-red-500"
+                aria-label="Show on website feed"
               />
               <Label>Show on website feed</Label>
             </CheckboxField>
