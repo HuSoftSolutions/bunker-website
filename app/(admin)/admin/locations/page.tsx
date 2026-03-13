@@ -1271,6 +1271,8 @@ export default function LocationsAdminPage() {
   );
 
   const isLoading = loading || docLoading;
+  const canManageLocationSignTvs =
+    isAdminUser || (isManagerUser && managerLocationTabs.has("sign-tvs"));
 
   const toastStatusRef = useRef({
     location: "idle",
@@ -1409,7 +1411,7 @@ export default function LocationsAdminPage() {
                 onSave={save}
                 onReset={reset}
                 firebase={firebase}
-                canManageTvs={isAdminUser}
+                canManageTvs={canManageLocationSignTvs}
                 calendarState={calendarState}
                 locations={scopedLocations}
                 defaultLocationName={
