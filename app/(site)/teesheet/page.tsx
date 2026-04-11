@@ -73,51 +73,18 @@ export default function TeesheetPage() {
     locationNameParam ??
     (activeLocationName || null) ??
     (embedUrl ? "The Bunker Teesheet" : "Book Your Bay");
-  const activeLocationAddress = resolveStringValue(activeLocation?.address);
 
   const showFallbackNotice = !embedUrl && !businessSettingsLoading;
 
   return (
     <div className="flex h-[calc(100vh-60px)] flex-col bg-gradient-to-b from-black via-zinc-950 to-black text-white sm:h-auto sm:min-h-screen">
-      {/* Desktop header — hidden on mobile to maximize iframe space */}
-      <header className="hidden shrink-0 border-b border-white/10 bg-black/60 sm:block">
-        <div className="mx-auto flex w-full max-w-full flex-row items-center justify-between gap-3 px-4 py-6">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-primary/70">
-              Book Now
-            </p>
-            <h1 className="text-2xl font-semibold uppercase tracking-wide md:text-3xl">
-              {title}
-            </h1>
-            <p className="mt-2 text-sm text-white/60">
-              Reserve your time without leaving The Bunker experience.
-            </p>
-            {activeLocationAddress ? (
-              <p className="mt-1 text-xs uppercase tracking-wide text-white/50">
-                {activeLocationAddress}
-              </p>
-            ) : null}
-          </div>
-          {embedUrl ? (
-            <a
-              href={embedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
-            >
-              Open Teesheet In New Window
-            </a>
-          ) : null}
-        </div>
-      </header>
-
-      {/* Mobile: open-in-new-tab icon pinned into the nav bar, left of hamburger */}
+      {/* Open-in-new-window icon pinned into the nav bar, left of hamburger */}
       {embedUrl ? (
         <a
           href={embedUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="fixed right-16 top-3 z-50 flex items-center justify-center rounded-full border border-white/20 p-2 text-white transition hover:bg-white/10 sm:hidden"
+          className="fixed right-16 top-3 z-50 flex items-center justify-center rounded-full border border-white/20 p-2 text-white transition hover:bg-white/10"
           aria-label="Open Teesheet In New Window"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
