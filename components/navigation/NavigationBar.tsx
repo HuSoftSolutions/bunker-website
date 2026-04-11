@@ -169,7 +169,7 @@ export function NavigationBar() {
           className={clsx(
             "lg:hidden",
             mobileOpen
-              ? "max-h-screen border-t border-white/10 bg-black/95"
+              ? "max-h-[calc(100vh-60px)] overflow-y-auto border-t border-white/10 bg-black/95"
               : "pointer-events-none max-h-0 overflow-hidden",
           )}
         >
