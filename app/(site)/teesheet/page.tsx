@@ -77,7 +77,7 @@ export default function TeesheetPage() {
   const showFallbackNotice = !embedUrl && !businessSettingsLoading;
 
   return (
-    <div className="flex h-[calc(100vh-60px)] flex-col bg-gradient-to-b from-black via-zinc-950 to-black text-white sm:h-auto sm:min-h-screen">
+    <div className="flex h-[calc(100vh-60px)] flex-col bg-gradient-to-b from-black via-zinc-950 to-black text-white xl:h-auto xl:min-h-screen">
       {/* Open-in-new-window icon pinned into the nav bar, left of hamburger */}
       {embedUrl ? (
         <a
