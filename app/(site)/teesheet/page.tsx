@@ -7,6 +7,7 @@ import useBusinessSettings from "@/hooks/useBusinessSettings";
 import { useFirebase } from "@/providers/FirebaseProvider";
 
 const HTTPS_PROTOCOL = /^https?:\/\//i;
+const LOCAL_TEESHEET_URL = "http://localhost:5173/location/thebunker";
 
 const resolveStringValue = (value: unknown, fallback = "") =>
   typeof value === "string" && value.trim() ? value : fallback;
@@ -38,7 +39,11 @@ export default function TeesheetPage() {
   const locationNameParam = searchParams.get("locationName");
 
   const fallbackUrl = sanitizeUrl(
-    resolveStringValue(businessSettings?.teesheetUrl),
+    resolveStringValue(
+      process.env.NODE_ENV === "development"
+        ? LOCAL_TEESHEET_URL
+        : businessSettings?.teesheetUrl,
+    ),
   );
   const embedUrl = requestedUrl ?? fallbackUrl;
 
@@ -73,9 +78,10 @@ export default function TeesheetPage() {
   const showFallbackNotice = !embedUrl && !businessSettingsLoading;
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-black via-zinc-950 to-black text-white">
-      <header className="border-b border-white/10 bg-black/60">
-        <div className="mx-auto flex w-full max-w-full flex-col gap-3 px-4 py-6 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex h-[calc(100vh-60px)] flex-col bg-gradient-to-b from-black via-zinc-950 to-black text-white sm:h-auto sm:min-h-screen">
+      {/* Desktop header — hidden on mobile to maximize iframe space */}
+      <header className="hidden shrink-0 border-b border-white/10 bg-black/60 sm:block">
+        <div className="mx-auto flex w-full max-w-full flex-row items-center justify-between gap-3 px-4 py-6">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-primary/70">
               Book Now
@@ -104,6 +110,23 @@ export default function TeesheetPage() {
           ) : null}
         </div>
       </header>
+
+      {/* Mobile: open-in-new-tab icon pinned into the nav bar, left of hamburger */}
+      {embedUrl ? (
+        <a
+          href={embedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed right-16 top-3 z-50 flex items-center justify-center rounded-full border border-white/20 p-2 text-white transition hover:bg-white/10 sm:hidden"
+          aria-label="Open in new tab"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      ) : null}
 
       <div className="relative flex flex-1 flex-col">
         {embedUrl ? (
