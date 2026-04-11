@@ -64,7 +64,7 @@ export function NavigationBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-black/90 backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-40 bg-black/90 backdrop-blur xl:hidden">
         <div className="mx-auto flex w-full max-w-full items-center justify-between px-4 py-3 md:py-4">
           <Link href={ROUTES.LANDING} className="flex items-center gap-2">
             <Image
@@ -72,7 +72,7 @@ export function NavigationBar() {
               alt="The Bunker"
               width={180}
               height={48}
-              className="hidden h-10 w-auto lg:block"
+              className="hidden h-10 w-auto xl:block"
               priority
             />
             <Image
@@ -80,12 +80,12 @@ export function NavigationBar() {
               alt="The Bunker"
               width={160}
               height={44}
-              className="block h-8 w-auto lg:hidden"
+              className="block h-8 w-auto xl:hidden"
               priority
             />
           </Link>
 
-          <nav className="hidden items-center gap-6 text-sm font-semibold uppercase text-white lg:flex">
+          <nav className="hidden items-center gap-6 text-sm font-semibold uppercase text-white xl:flex">
             <div className="flex items-center gap-6">
               {navItems.map((item) =>
                 item.type === "link" ? (
@@ -149,7 +149,7 @@ export function NavigationBar() {
             </div>
           </nav>
 
-          <div className="hidden items-center gap-3 lg:flex">
+          <div className="hidden items-center gap-3 xl:flex">
             <BookNowButton className="w-auto" />
             <BookEventsButton className="w-auto" />
             <LocationSelector className="w-auto" />
@@ -159,7 +159,7 @@ export function NavigationBar() {
             type="button"
             aria-label="Toggle menu"
             onClick={() => setMobileOpen((prev) => !prev)}
-            className="flex items-center justify-center rounded-full border border-white/20 p-2 text-white transition hover:bg-white/10 lg:hidden"
+            className="flex items-center justify-center rounded-full border border-white/20 p-2 text-white transition hover:bg-white/10 xl:hidden"
           >
             {mobileOpen ? <FiX size={18} /> : <FiMenu size={18} />}
           </button>
@@ -167,7 +167,7 @@ export function NavigationBar() {
 
         <div
           className={clsx(
-            "lg:hidden",
+            "xl:hidden",
             mobileOpen
               ? "max-h-[calc(100vh-60px)] overflow-y-auto border-t border-white/10 bg-black/95"
               : "pointer-events-none max-h-0 overflow-hidden",
@@ -245,7 +245,7 @@ export function NavigationBar() {
         </div>
       </header>
 
-      <aside className="hidden lg:flex lg:sticky lg:top-0 lg:h-screen lg:w-72 xl:w-80 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-white/10 lg:bg-black/95 lg:px-6 lg:py-8 lg:shadow-lg lg:shadow-black/40 lg:shrink-0">
+      <aside className="hidden xl:flex xl:sticky xl:top-0 xl:h-screen xl:w-72 2xl:w-80 xl:flex-col xl:overflow-y-auto xl:border-r xl:border-white/10 xl:bg-black/95 xl:px-6 xl:py-8 xl:shadow-lg xl:shadow-black/40 xl:shrink-0">
         <div className="flex h-full flex-col gap-8">
           <Link
             href={ROUTES.LANDING}
@@ -257,7 +257,7 @@ export function NavigationBar() {
               alt="The Bunker"
               width={220}
               height={120}
-              className="h-auto w-40 xl:w-48"
+              className="h-auto w-40 2xl:w-48"
               priority
             />
           </Link>

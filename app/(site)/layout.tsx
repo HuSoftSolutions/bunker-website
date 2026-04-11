@@ -23,7 +23,7 @@ export default function SiteLayout({
       </div>
 
       <div className="relative z-10 bg-gradient-to-b from-black/80 via-zinc-950/90 to-black/85">
-        <div className="flex min-h-screen flex-col lg:flex-row">
+        <div className="flex min-h-screen flex-col xl:flex-row">
           <NavigationBar />
           <div className="flex min-w-0 flex-1 flex-col">
             <main className="flex-1">{children}</main>
