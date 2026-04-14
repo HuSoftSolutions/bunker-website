@@ -174,6 +174,16 @@ export default function MenusPage() {
                 >
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-2">
+                      <h3 className="text-left text-xl font-semibold uppercase tracking-wide text-primary">
+                        {locationName}
+                      </h3>
+                      {hasBrunchMenu ? (
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
+                          Brunch Available
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() =>
@@ -182,17 +192,10 @@ export default function MenusPage() {
                             menus,
                           })
                         }
-                        className="text-left text-xl font-semibold uppercase tracking-wide text-primary transition hover:text-primary/80"
+                        className="inline-flex items-center justify-center rounded-full bg-zinc-900 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:bg-zinc-800 hover:shadow-black/30"
                       >
-                        {locationName} Menu
+                        View Menu
                       </button>
-                      {hasBrunchMenu ? (
-                        <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
-                          Brunch Available
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
                       {ORDERING_LINKS.map(({ key, label }) => {
                         const url = resolveStringValue(location[key]);
                         if (!url) {
