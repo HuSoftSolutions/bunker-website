@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
-import { FiMenu, FiX } from "react-icons/fi";
+import { FiChevronDown, FiMenu, FiX } from "react-icons/fi";
 import { ImFacebook, ImInstagram } from "react-icons/im";
 import * as ROUTES from "@/constants/routes";
 import { BookNowButton } from "@/components/buttons/BookNowButton";
@@ -31,9 +31,6 @@ const navItems = [
   { type: "link", href: ROUTES.ABOUT_US, label: "About" },
 ] as const;
 
-type NavItem = (typeof navItems)[number];
-type NavAction = Extract<NavItem, { type: "action" }>["action"];
-
 const golfLinks = [
   { href: ROUTES.LESSONS, label: "Lessons" },
   { href: ROUTES.LEAGUES, label: "Leagues" },
@@ -44,23 +41,13 @@ const golfLinks = [
 
 export function NavigationBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [golfDialogOpen, setGolfDialogOpen] = useState(false);
+  const [golfMenuOpen, setGolfMenuOpen] = useState(false);
   const [giftCardsDialogOpen, setGiftCardsDialogOpen] = useState(false);
   const { authUser } = useAuth();
 
   const isAllowedAdmin = isAdminOrManager(authUser) && !isDisabled(authUser);
 
-  const handleNavAction = (action: NavAction) => {
-    if (action === "golf") {
-      setGolfDialogOpen(true);
-      setGiftCardsDialogOpen(false);
-      return;
-    }
-    if (action === "gift") {
-      setGiftCardsDialogOpen(true);
-      setGolfDialogOpen(false);
-    }
-  };
+  const toggleGolfMenu = () => setGolfMenuOpen((prev) => !prev);
 
   return (
     <>
@@ -106,12 +93,47 @@ export function NavigationBar() {
                   >
                     {item.label}
                   </a>
+                ) : item.action === "golf" ? (
+                  <div key={item.label} className="relative">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 transition hover:text-primary"
+                      onClick={toggleGolfMenu}
+                      aria-expanded={golfMenuOpen}
+                      aria-controls="desktop-golf-submenu"
+                    >
+                      {item.label}
+                      <FiChevronDown
+                        size={14}
+                        className={clsx(
+                          "transition-transform",
+                          golfMenuOpen ? "rotate-180" : "rotate-0",
+                        )}
+                      />
+                    </button>
+                    {golfMenuOpen ? (
+                      <div
+                        id="desktop-golf-submenu"
+                        className="absolute left-0 top-full z-20 mt-2 w-56 rounded-2xl border border-white/10 bg-black/95 p-2 shadow-xl shadow-black/40"
+                      >
+                        {golfLinks.map((link) => (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            className="block rounded-xl px-3 py-2 text-xs transition hover:bg-white/10 hover:text-primary"
+                          >
+                            {link.label}
+                          </Link>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                 ) : (
                   <button
                     key={item.label}
                     type="button"
                     className="transition hover:text-primary"
-                    onClick={() => handleNavAction(item.action)}
+                    onClick={() => setGiftCardsDialogOpen(true)}
                   >
                     {item.label}
                   </button>
@@ -199,17 +221,53 @@ export function NavigationBar() {
                   {item.label}
                 </a>
               ) : (
-                <button
-                  key={item.label}
-                  type="button"
-                  className="rounded-xl bg-white/5 px-4 py-2 text-left uppercase transition hover:bg-primary/20"
-                  onClick={() => {
-                    setMobileOpen(false);
-                    handleNavAction(item.action);
-                  }}
-                >
-                  {item.label}
-                </button>
+                <div key={item.label} className="space-y-2">
+                  {item.action === "golf" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between rounded-xl bg-white/5 px-4 py-2 text-left uppercase transition hover:bg-primary/20"
+                        onClick={toggleGolfMenu}
+                        aria-expanded={golfMenuOpen}
+                        aria-controls="mobile-golf-submenu"
+                      >
+                        {item.label}
+                        <FiChevronDown
+                          size={16}
+                          className={clsx(
+                            "transition-transform",
+                            golfMenuOpen ? "rotate-180" : "rotate-0",
+                          )}
+                        />
+                      </button>
+                      {golfMenuOpen ? (
+                        <div id="mobile-golf-submenu" className="space-y-2 pl-3">
+                          {golfLinks.map((link) => (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              className="block rounded-xl bg-white/5 px-4 py-2 text-xs transition hover:bg-primary/20"
+                              onClick={() => setMobileOpen(false)}
+                            >
+                              {link.label}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="w-full rounded-xl bg-white/5 px-4 py-2 text-left uppercase transition hover:bg-primary/20"
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setGiftCardsDialogOpen(true);
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  )}
+                </div>
               ),
             )}
             {isAllowedAdmin ? (
@@ -289,14 +347,49 @@ export function NavigationBar() {
                   {item.label}
                 </a>
               ) : (
-                <button
-                  key={item.label}
-                  type="button"
-                  className="rounded-full px-4 py-2 text-left font-semibold uppercase tracking-wide transition hover:bg-white/10"
-                  onClick={() => handleNavAction(item.action)}
-                >
-                  {item.label}
-                </button>
+                <div key={item.label} className="space-y-1">
+                  {item.action === "golf" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between rounded-full px-4 py-2 text-left font-semibold uppercase tracking-wide transition hover:bg-white/10"
+                        onClick={toggleGolfMenu}
+                        aria-expanded={golfMenuOpen}
+                        aria-controls="sidebar-golf-submenu"
+                      >
+                        {item.label}
+                        <FiChevronDown
+                          size={14}
+                          className={clsx(
+                            "transition-transform",
+                            golfMenuOpen ? "rotate-180" : "rotate-0",
+                          )}
+                        />
+                      </button>
+                      {golfMenuOpen ? (
+                        <div id="sidebar-golf-submenu" className="space-y-1 pl-6">
+                          {golfLinks.map((link) => (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              className="block rounded-full px-4 py-2 text-xs transition hover:bg-white/10 hover:text-primary"
+                            >
+                              {link.label}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="w-full rounded-full px-4 py-2 text-left font-semibold uppercase tracking-wide transition hover:bg-white/10"
+                      onClick={() => setGiftCardsDialogOpen(true)}
+                    >
+                      {item.label}
+                    </button>
+                  )}
+                </div>
               ),
             )}
           </nav>
@@ -337,48 +430,6 @@ export function NavigationBar() {
           </div>
         </div>
       </aside>
-
-      {golfDialogOpen ? (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
-            onClick={() => setGolfDialogOpen(false)}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-950/95 p-6 shadow-2xl shadow-black/40">
-              <button
-                type="button"
-                onClick={() => setGolfDialogOpen(false)}
-                className="absolute right-4 top-4 rounded-full border border-white/10 p-2 text-white/60 transition hover:border-primary/50 hover:text-primary"
-                aria-label="Close golf experiences menu"
-              >
-                <FiX size={16} />
-              </button>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">
-                Golf At The Bunker
-              </p>
-              <h2 className="mt-2 text-2xl font-bold uppercase tracking-wide text-white">
-                Choose A Program
-              </h2>
-              <p className="mt-3 text-sm text-white/70">
-                Explore instruction, leagues, and premium membership options tailored for every golfer.
-              </p>
-              <div className="mt-6 flex flex-col gap-3">
-                {golfLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:border-primary/60 hover:bg-primary/20"
-                    onClick={() => setGolfDialogOpen(false)}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </>
-      ) : null}
 
       {giftCardsDialogOpen ? (
         <>
