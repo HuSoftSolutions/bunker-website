@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import type Firebase from "@/lib/firebase/client";
 import { onSnapshot, type DocumentData, type DocumentSnapshot } from "firebase/firestore";
-import type { MembershipFormContent } from "@/data/membershipContent";
+import type { MembershipFormContent, MembershipSeason } from "@/data/membershipContent";
+
+export type MembershipSeasonSettings = {
+  label?: string | null;
+  paymentUrl?: string | null;
+  paymentLinks?: Record<string, string> | null;
+  form?: MembershipFormContent | null;
+};
 
 export type BusinessSettings = {
   teesheetUrl?: string | null;
@@ -15,6 +22,7 @@ export type BusinessSettings = {
     storagePath?: string | null;
   } | null;
   membershipForm?: MembershipFormContent | null;
+  membershipSeasons?: Partial<Record<MembershipSeason, MembershipSeasonSettings>> | null;
 };
 
 const DEFAULT_SETTINGS: BusinessSettings = {
@@ -24,6 +32,7 @@ const DEFAULT_SETTINGS: BusinessSettings = {
   membershipPaymentLinks: null,
   membershipHeroImage: null,
   membershipForm: null,
+  membershipSeasons: null,
 };
 
 export default function useBusinessSettings(firebase: Firebase) {

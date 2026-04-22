@@ -3,8 +3,11 @@
 import { PageHero } from "@/components/layout/PageHero";
 import { MembershipInquiryForm } from "@/components/membership/MembershipInquiryForm";
 import {
-  DEFAULT_MEMBERSHIP_CONTENT,
+  DEFAULT_SEASON_LABELS,
   DEFAULT_MEMBERSHIP_FAQS,
+  MEMBERSHIP_SEASONS,
+  createDefaultSeasonalMembershipContent,
+  type MembershipFormContent,
 } from "@/data/membershipContent";
 import { Button } from "@/components/ui/Button";
 import useBusinessSettings from "@/hooks/useBusinessSettings";
@@ -22,33 +25,64 @@ function mergeList(value: unknown, fallback: string[]) {
     .filter(Boolean);
 }
 
+function mergeMembershipContent(
+  configured: unknown,
+  fallback: MembershipFormContent,
+): MembershipFormContent {
+  const candidate =
+    configured && typeof configured === "object"
+      ? (configured as Partial<MembershipFormContent>)
+      : {};
+
+  return {
+    ...fallback,
+    ...candidate,
+    paymentOptions: mergeList(candidate.paymentOptions, [...fallback.paymentOptions]),
+    perks: mergeList(candidate.perks, [...fallback.perks]),
+    details: mergeList(candidate.details, [...fallback.details]),
+    membershipTypes: mergeList(candidate.membershipTypes, [...fallback.membershipTypes]),
+    enrollmentSteps: mergeList(candidate.enrollmentSteps, [...fallback.enrollmentSteps]),
+  };
+}
+
 export default function MembershipPageContent() {
   const firebase = useFirebase();
   const { settings } = useBusinessSettings(firebase);
 
-  const { heroImageUrl, membershipContent } = useMemo(() => {
+  const { heroImageUrl, seasonalMemberships } = useMemo(() => {
     const configuredHeroUrl =
       typeof settings.membershipHeroImage?.url === "string"
         ? settings.membershipHeroImage.url.trim()
         : "";
 
-    const configured = settings.membershipForm ?? null;
-    const merged = {
-      ...DEFAULT_MEMBERSHIP_CONTENT,
-      ...(configured ?? {}),
-      paymentOptions: mergeList(configured?.paymentOptions, [...DEFAULT_MEMBERSHIP_CONTENT.paymentOptions]),
-      perks: mergeList(configured?.perks, [...DEFAULT_MEMBERSHIP_CONTENT.perks]),
-      details: mergeList(configured?.details, [...DEFAULT_MEMBERSHIP_CONTENT.details]),
-      membershipTypes: mergeList(configured?.membershipTypes, [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes]),
-      enrollmentSteps: mergeList(configured?.enrollmentSteps, [...DEFAULT_MEMBERSHIP_CONTENT.enrollmentSteps]),
-    };
+    const seasonDefaults = createDefaultSeasonalMembershipContent();
+    const configuredSeasons =
+      settings.membershipSeasons && typeof settings.membershipSeasons === "object"
+        ? settings.membershipSeasons
+        : null;
+    const legacyConfigured = settings.membershipForm ?? null;
+    const hasSeasonConfig = Boolean(configuredSeasons);
+
+    const seasonal = MEMBERSHIP_SEASONS.map((season) => {
+      const seasonConfig = configuredSeasons?.[season];
+      const seasonFallback = seasonDefaults[season];
+      const formConfig = seasonConfig?.form ?? (!hasSeasonConfig ? legacyConfigured : null);
+      const content = mergeMembershipContent(formConfig, seasonFallback);
+      const label =
+        typeof seasonConfig?.label === "string" && seasonConfig.label.trim()
+          ? seasonConfig.label.trim()
+          : DEFAULT_SEASON_LABELS[season];
+
+      return { season, label, content };
+    });
 
     return {
       heroImageUrl: configuredHeroUrl || undefined,
-      membershipContent: merged,
+      seasonalMemberships: seasonal,
     };
   }, [
     settings.membershipHeroImage?.url,
+    settings.membershipSeasons,
     settings.membershipForm,
   ]);
 
@@ -65,19 +99,62 @@ export default function MembershipPageContent() {
         <div className="pointer-events-none absolute inset-x-0 top-0 mx-auto h-64 w-[90%] max-w-5xl rounded-full bg-primary/10 blur-3xl" />
 
         <div className="relative mx-auto w-full max-w-5xl px-4 text-white/80 sm:px-8">
-          <section>
-            <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
-              Payment Options
-            </h3>
-            <div className="mt-6 space-y-4 text-base text-white/80">
-              {membershipContent.paymentOptions.map((option) => (
-                <p key={option}>{option}</p>
+          <section className="space-y-6">
+            <div className="grid gap-6 xl:grid-cols-2">
+              {seasonalMemberships.map(({ season, label, content }) => (
+                <article
+                  key={season}
+                  className="rounded-3xl border border-white/10 bg-black/30 p-6"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">
+                    {label}
+                  </p>
+                  <h3 className="mt-3 text-2xl font-bold uppercase tracking-wide text-white">
+                    Payment Options
+                  </h3>
+                  <div className="mt-6 space-y-4 text-base text-white/80">
+                    {content.paymentOptions.map((option) => (
+                      <p key={option}>{option}</p>
+                    ))}
+                  </div>
+
+                  <SectionDivider />
+
+                  <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
+                    {content.perksTitle}
+                  </h3>
+                  <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
+                    {content.perks.map((perk) => (
+                      <li key={perk}>{perk}</li>
+                    ))}
+                  </ul>
+
+                  <SectionDivider />
+
+                  <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
+                    {content.detailsTitle}
+                  </h3>
+                  <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
+                    {content.details.map((detail) => (
+                      <li key={detail}>{detail}</li>
+                    ))}
+                  </ul>
+
+                  <SectionDivider />
+
+                  <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
+                    {content.enrollmentTitle}
+                  </h3>
+                  <div className="mt-6 space-y-3 text-base text-white/80">
+                    {content.enrollmentSteps.map((step) => (
+                      <p key={step}>{step}</p>
+                    ))}
+                  </div>
+                  <div className="mt-8">
+                    <Button href="#membership-form">Join Now</Button>
+                  </div>
+                </article>
               ))}
-            </div>
-            <div className="mt-8">
-              <Button href="#membership-form">
-                Join Now
-              </Button>
             </div>
           </section>
 
@@ -85,26 +162,22 @@ export default function MembershipPageContent() {
 
           <section>
             <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
-              {membershipContent.perksTitle}
+              Join A Membership
             </h3>
-            <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
-              {membershipContent.perks.map((perk) => (
-                <li key={perk}>{perk}</li>
-              ))}
-            </ul>
-          </section>
-
-          <SectionDivider />
-
-          <section>
-            <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
-              {membershipContent.detailsTitle}
-            </h3>
-            <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
-              {membershipContent.details.map((detail) => (
-                <li key={detail}>{detail}</li>
-              ))}
-            </ul>
+            <div className="mt-8" id="membership-form">
+              <MembershipInquiryForm
+                firebase={firebase}
+                content={
+                  seasonalMemberships[0]?.content ??
+                  createDefaultSeasonalMembershipContent().winter
+                }
+                seasonOptions={seasonalMemberships.map(({ season, label, content }) => ({
+                  season,
+                  label,
+                  content,
+                }))}
+              />
+            </div>
           </section>
 
           <SectionDivider />
@@ -120,25 +193,6 @@ export default function MembershipPageContent() {
                   <div className="px-6 pb-6 text-base text-white/70">{answer}</div>
                 </details>
               ))}
-            </div>
-          </section>
-
-          <SectionDivider />
-
-          <section>
-            <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
-              {membershipContent.enrollmentTitle}
-            </h3>
-            <div className="mt-6 space-y-3 text-base text-white/80">
-              {membershipContent.enrollmentSteps.map((step) => (
-                <p key={step}>{step}</p>
-              ))}
-            </div>
-            <div className="mt-8" id="membership-form">
-              <MembershipInquiryForm
-                firebase={firebase}
-                content={membershipContent}
-              />
             </div>
           </section>
         </div>

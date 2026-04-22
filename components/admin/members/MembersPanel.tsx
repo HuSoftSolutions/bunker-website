@@ -114,14 +114,34 @@ export function MembersPanel({
   );
 
   const membershipTypes = useMemo(() => {
+    const fromSeasons =
+      businessSettings.membershipSeasons &&
+      typeof businessSettings.membershipSeasons === "object"
+        ? Object.values(businessSettings.membershipSeasons).flatMap((season) =>
+            Array.isArray(season?.form?.membershipTypes)
+              ? season.form.membershipTypes
+              : [],
+          )
+        : [];
+    const normalizedFromSeasons = fromSeasons.filter(
+      (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+    );
+    if (normalizedFromSeasons.length) {
+      return Array.from(new Set(normalizedFromSeasons));
+    }
+
     const configured = businessSettings.membershipForm?.membershipTypes;
     if (Array.isArray(configured) && configured.length) {
-      return configured.filter(
-        (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+      return Array.from(
+        new Set(
+          configured.filter(
+            (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+          ),
+        ),
       );
     }
     return [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes];
-  }, [businessSettings.membershipForm]);
+  }, [businessSettings.membershipForm, businessSettings.membershipSeasons]);
 
   const activeLocation = useMemo(() => {
     if (!selectedLocationId) {

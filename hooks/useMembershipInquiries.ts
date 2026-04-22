@@ -24,6 +24,7 @@ export type MembershipInquiry = {
   email: string;
   phone: string;
   primaryLocation: string;
+  membershipSeason?: string | null;
   membershipType: string;
   referredBy?: string | null;
   notes?: string | null;
@@ -127,6 +128,8 @@ export function useMembershipInquiries(
             email: typeof data.email === "string" ? data.email : "",
             phone: typeof data.phone === "string" ? data.phone : "",
             primaryLocation: typeof data.primaryLocation === "string" ? data.primaryLocation : "",
+            membershipSeason:
+              typeof data.membershipSeason === "string" ? data.membershipSeason : null,
             membershipType: typeof data.membershipType === "string" ? data.membershipType : "",
             referredBy: typeof data.referredBy === "string" ? data.referredBy : null,
             notes: typeof data.notes === "string" ? data.notes : null,

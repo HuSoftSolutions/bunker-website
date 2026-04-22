@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { addDoc, serverTimestamp } from "firebase/firestore";
 import { toast } from "react-toastify";
 import type Firebase from "@/lib/firebase/client";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
 import useBusinessSettings from "@/hooks/useBusinessSettings";
-import type { MembershipFormContent } from "@/data/membershipContent";
+import type { MembershipFormContent, MembershipSeason } from "@/data/membershipContent";
 import { Button } from "@/components/ui/Button";
 import {
   Dialog,
@@ -42,12 +42,20 @@ const LOCATION_OPTIONS = [
 type MembershipInquiryFormProps = {
   firebase: Firebase;
   content: MembershipFormContent;
+  season?: MembershipSeason;
+  seasonOptions?: Array<{
+    season: MembershipSeason;
+    label: string;
+    content: MembershipFormContent;
+  }>;
   className?: string;
 };
 
 export function MembershipInquiryForm({
   firebase,
   content,
+  season,
+  seasonOptions,
   className,
 }: MembershipInquiryFormProps) {
   const { settings } = useInquirySettings(firebase);
@@ -67,16 +75,37 @@ export function MembershipInquiryForm({
   const [recipientName, setRecipientName] = useState("");
   const [primaryLocation, setPrimaryLocation] = useState("");
   const [referredBy, setReferredBy] = useState("");
+  const [selectedSeason, setSelectedSeason] = useState<MembershipSeason | "">(
+    season ?? seasonOptions?.[0]?.season ?? "",
+  );
   const [membershipType, setMembershipType] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [submittedSeason, setSubmittedSeason] = useState<MembershipSeason | "">("");
   const [submittedMembershipType, setSubmittedMembershipType] = useState("");
   const [submittedPaymentUrl, setSubmittedPaymentUrl] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const submitGuardRef = useRef(false);
+
+  const activeSeason = season ?? (selectedSeason || null);
+  const selectedSeasonOption = useMemo(
+    () => seasonOptions?.find((option) => option.season === activeSeason) ?? null,
+    [activeSeason, seasonOptions],
+  );
+  const activeContent = selectedSeasonOption?.content ?? content;
+  const requiresSeasonSelection = !season && Boolean(seasonOptions?.length);
+
+  useEffect(() => {
+    if (!membershipType.trim()) {
+      return;
+    }
+    if (!activeContent.membershipTypes.includes(membershipType)) {
+      setMembershipType("");
+    }
+  }, [activeContent.membershipTypes, membershipType]);
 
   const validators = useMemo(() => {
     const errors: string[] = [];
@@ -90,6 +119,9 @@ export function MembershipInquiryForm({
     if (!primaryLocation.trim()) {
       errors.push("Please select a primary location.");
     }
+    if (requiresSeasonSelection && !activeSeason) {
+      errors.push("Please select a membership season.");
+    }
     if (!membershipType.trim()) {
       errors.push("Please select a membership type.");
     }
@@ -101,7 +133,16 @@ export function MembershipInquiryForm({
     }
 
     return { isInvalid: errors.length > 0, errors };
-  }, [email, recipientName, primaryLocation, membershipType, fullName, phone]);
+  }, [
+    email,
+    recipientName,
+    primaryLocation,
+    requiresSeasonSelection,
+    activeSeason,
+    membershipType,
+    fullName,
+    phone,
+  ]);
 
   const resetForm = () => {
     setEmail("");
@@ -134,6 +175,7 @@ export function MembershipInquiryForm({
         recipientName: recipientName.trim(),
         primaryLocation: primaryLocation.trim(),
         referredBy: referredBy.trim() || null,
+        membershipSeason: activeSeason ?? null,
         membershipType: membershipType.trim(),
         fullName: fullName.trim(),
         phone: phone.trim(),
@@ -152,6 +194,7 @@ export function MembershipInquiryForm({
             recipientName: recipientName.trim(),
             primaryLocation: primaryLocation.trim(),
             referredBy: referredBy.trim() || null,
+            membershipSeason: activeSeason ?? null,
             membershipType: membershipType.trim(),
             fullName: fullName.trim(),
             phone: phone.trim(),
@@ -169,9 +212,10 @@ export function MembershipInquiryForm({
       const submittedType = membershipType.trim();
       resetForm();
       setPaymentModalOpen(true);
+      setSubmittedSeason(activeSeason ?? "");
       setSubmittedMembershipType(submittedType);
-      setSubmittedPaymentUrl(resolvePaymentUrl(submittedType));
-      toast.success(content.successTitle);
+      setSubmittedPaymentUrl(resolvePaymentUrl(submittedType, activeSeason));
+      toast.success(activeContent.successTitle);
     } catch (error) {
       console.error("[MembershipInquiryForm] submit failed", error);
       toast.error(
@@ -183,23 +227,41 @@ export function MembershipInquiryForm({
     }
   };
 
-  const paymentLinks =
-    businessSettings.membershipPaymentLinks &&
-    typeof businessSettings.membershipPaymentLinks === "object"
-      ? businessSettings.membershipPaymentLinks
-      : {};
-  const resolvePaymentUrl = (typeValue: string) => {
+  const resolveSeasonSettings = (seasonValue?: MembershipSeason | null) =>
+    seasonValue &&
+    businessSettings.membershipSeasons &&
+    typeof businessSettings.membershipSeasons === "object"
+      ? businessSettings.membershipSeasons[seasonValue]
+      : null;
+
+  const resolvePaymentUrl = (
+    typeValue: string,
+    seasonValue?: MembershipSeason | null,
+  ) => {
+    const seasonSettings = resolveSeasonSettings(seasonValue);
+    const paymentLinks =
+      seasonSettings?.paymentLinks &&
+      typeof seasonSettings.paymentLinks === "object"
+        ? seasonSettings.paymentLinks
+        : businessSettings.membershipPaymentLinks &&
+            typeof businessSettings.membershipPaymentLinks === "object"
+          ? businessSettings.membershipPaymentLinks
+          : {};
     const typePaymentUrl =
       typeValue && typeof paymentLinks[typeValue] === "string"
         ? paymentLinks[typeValue].trim()
         : "";
     const defaultUrl =
-      typeof businessSettings.membershipPaymentUrl === "string"
-        ? businessSettings.membershipPaymentUrl.trim()
+      typeof seasonSettings?.paymentUrl === "string" && seasonSettings.paymentUrl.trim()
+        ? seasonSettings.paymentUrl.trim()
+        : typeof businessSettings.membershipPaymentUrl === "string"
+          ? businessSettings.membershipPaymentUrl.trim()
         : "";
     return typePaymentUrl || defaultUrl;
   };
-  const paymentUrl = submittedPaymentUrl || resolvePaymentUrl(submittedMembershipType);
+  const paymentUrl =
+    submittedPaymentUrl ||
+    resolvePaymentUrl(submittedMembershipType, (submittedSeason || activeSeason) as MembershipSeason | null);
 
   return (
     <form onSubmit={handleSubmit} className={className}>
@@ -209,9 +271,9 @@ export function MembershipInquiryForm({
             Membership
           </p>
           <h2 className="text-2xl font-bold uppercase tracking-wide text-white">
-            {content.formTitle}
+            {activeContent.formTitle}
           </h2>
-          <p className="text-sm text-white/70">{content.formDescription}</p>
+          <p className="text-sm text-white/70">{activeContent.formDescription}</p>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -258,46 +320,32 @@ export function MembershipInquiryForm({
         </div>
 
         <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-5">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
-            {content.agreementTitle}
-          </h3>
-          <div className="mt-4 space-y-2 text-sm text-white/75">
-            {content.paymentOptions.map((option) => (
-              <p key={option}>{option}</p>
-            ))}
-          </div>
+          {requiresSeasonSelection ? (
+            <Field label="Membership Season" required>
+              <Select
+                value={selectedSeason}
+                onChange={(e) => setSelectedSeason(e.target.value as MembershipSeason | "")}
+                required
+              >
+                <option value="">Select a season</option>
+                {(seasonOptions ?? []).map((option) => (
+                  <option key={option.season} value={option.season}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
 
-          <div className="mt-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-              {content.perksTitle}
-            </p>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
-              {content.perks.map((perk) => (
-                <li key={perk}>{perk}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="mt-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-              {content.detailsTitle}
-            </p>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
-              {content.details.map((detail) => (
-                <li key={detail}>{detail}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="mt-6">
-            <Field label={content.membershipTypeLabel} required>
+          <div className={clsx(requiresSeasonSelection ? "mt-6" : "")}>
+            <Field label={activeContent.membershipTypeLabel} required>
               <Select
                 value={membershipType}
                 onChange={(e) => setMembershipType(e.target.value)}
                 required
               >
                 <option value="">Select a membership</option>
-                {content.membershipTypes.map((option) => (
+                {activeContent.membershipTypes.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
@@ -305,6 +353,47 @@ export function MembershipInquiryForm({
               </Select>
             </Field>
           </div>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-white/10 bg-black/30 p-5">
+          {requiresSeasonSelection && !activeSeason ? (
+            <p className="text-sm text-white/70">
+              Select a membership season above to view payment options and details.
+            </p>
+          ) : (
+            <>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
+            {activeContent.agreementTitle}
+          </h3>
+          <div className="mt-4 space-y-2 text-sm text-white/75">
+            {activeContent.paymentOptions.map((option) => (
+              <p key={option}>{option}</p>
+            ))}
+          </div>
+
+          <div className="mt-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+              {activeContent.perksTitle}
+            </p>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
+              {activeContent.perks.map((perk) => (
+                <li key={perk}>{perk}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+              {activeContent.detailsTitle}
+            </p>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
+              {activeContent.details.map((detail) => (
+                <li key={detail}>{detail}</li>
+              ))}
+            </ul>
+          </div>
+            </>
+          )}
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -373,13 +462,14 @@ export function MembershipInquiryForm({
         open={paymentModalOpen}
         onClose={() => {
           setPaymentModalOpen(false);
+          setSubmittedSeason("");
           setSubmittedMembershipType("");
           setSubmittedPaymentUrl("");
         }}
         size="lg"
       >
-        <DialogTitle>{content.successTitle}</DialogTitle>
-        <DialogDescription>{content.successMessage}</DialogDescription>
+        <DialogTitle>{activeContent.successTitle}</DialogTitle>
+        <DialogDescription>{activeContent.successMessage}</DialogDescription>
         <DialogBody>
           {paymentUrl ? (
             <div className="space-y-3">
@@ -387,7 +477,7 @@ export function MembershipInquiryForm({
                 Complete payment to finalize your membership.
               </p>
               <Button href={paymentUrl} target="_blank" rel="noreferrer">
-                {content.paymentLinkLabel}
+                {activeContent.paymentLinkLabel}
               </Button>
             </div>
           ) : (
@@ -402,6 +492,7 @@ export function MembershipInquiryForm({
             type="button"
             onClick={() => {
               setPaymentModalOpen(false);
+              setSubmittedSeason("");
               setSubmittedMembershipType("");
             }}
           >

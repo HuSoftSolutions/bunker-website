@@ -16,6 +16,16 @@ export type MembershipFormContent = {
   enrollmentSteps: string[];
 };
 
+export const MEMBERSHIP_SEASONS = ["winter", "summer"] as const;
+export type MembershipSeason = (typeof MEMBERSHIP_SEASONS)[number];
+
+export type SeasonalMembershipContent = Record<MembershipSeason, MembershipFormContent>;
+
+export const DEFAULT_SEASON_LABELS: Record<MembershipSeason, string> = {
+  winter: "Winter Membership",
+  summer: "Summer Membership",
+};
+
 export const DEFAULT_MEMBERSHIP_CONTENT: MembershipFormContent = {
   formTitle: "Membership Accounts",
   formDescription: "Enrollment Step 1 - Complete the membership form. Enrollment Step 2 - Use the payment link after submission to complete payment.",
@@ -63,6 +73,43 @@ export const DEFAULT_MEMBERSHIP_CONTENT: MembershipFormContent = {
     "Step 2: Use the payment link after submission to complete payment.",
   ],
 } as const;
+
+export const DEFAULT_WINTER_MEMBERSHIP_CONTENT: MembershipFormContent = {
+  ...DEFAULT_MEMBERSHIP_CONTENT,
+  paymentOptions: [...DEFAULT_MEMBERSHIP_CONTENT.paymentOptions],
+  perks: [...DEFAULT_MEMBERSHIP_CONTENT.perks],
+  details: [...DEFAULT_MEMBERSHIP_CONTENT.details],
+  membershipTypes: [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes],
+  enrollmentSteps: [...DEFAULT_MEMBERSHIP_CONTENT.enrollmentSteps],
+};
+
+export const DEFAULT_SUMMER_MEMBERSHIP_CONTENT: MembershipFormContent = {
+  ...DEFAULT_MEMBERSHIP_CONTENT,
+  agreementTitle: "Summer Membership Agreement Payment Options",
+  paymentOptions: [...DEFAULT_MEMBERSHIP_CONTENT.paymentOptions],
+  perks: [...DEFAULT_MEMBERSHIP_CONTENT.perks],
+  details: [...DEFAULT_MEMBERSHIP_CONTENT.details],
+  membershipTypes: [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes],
+  enrollmentSteps: [...DEFAULT_MEMBERSHIP_CONTENT.enrollmentSteps],
+};
+
+function cloneMembershipContent(content: MembershipFormContent): MembershipFormContent {
+  return {
+    ...content,
+    paymentOptions: [...content.paymentOptions],
+    perks: [...content.perks],
+    details: [...content.details],
+    membershipTypes: [...content.membershipTypes],
+    enrollmentSteps: [...content.enrollmentSteps],
+  };
+}
+
+export function createDefaultSeasonalMembershipContent(): SeasonalMembershipContent {
+  return {
+    winter: cloneMembershipContent(DEFAULT_WINTER_MEMBERSHIP_CONTENT),
+    summer: cloneMembershipContent(DEFAULT_SUMMER_MEMBERSHIP_CONTENT),
+  };
+}
 
 export const DEFAULT_MEMBERSHIP_FAQS = [
   {

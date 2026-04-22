@@ -10,6 +10,7 @@ type MembershipInquiryEmailPayload = {
   email: string;
   phone: string;
   primaryLocation: string;
+  membershipSeason?: string | null;
   membershipType: string;
   referredBy?: string | null;
   notes?: string | null;
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
 
   const referredBy = isNonEmptyString(data.referredBy) ? data.referredBy.trim() : null;
   const notes = isNonEmptyString(data.notes) ? data.notes.trim() : null;
+  const season = isNonEmptyString(data.membershipSeason) ? data.membershipSeason.trim() : null;
   const subject = `Membership Inquiry: ${data.fullName.trim()} (${data.primaryLocation.trim()})`;
 
   const html = `
@@ -85,6 +87,7 @@ export async function POST(request: Request) {
       <p><strong>Email:</strong> <a href="mailto:${data.email}">${data.email}</a></p>
       <p><strong>Phone:</strong> <a href="tel:${data.phone}">${data.phone}</a></p>
       <p><strong>Primary Location:</strong> ${data.primaryLocation}</p>
+      <p><strong>Membership Season:</strong> ${season ?? "—"}</p>
       <p><strong>Membership Type:</strong> ${data.membershipType}</p>
       <p><strong>Referred By:</strong> ${referredBy ?? "—"}</p>
       <p><strong>Notes:</strong></p>

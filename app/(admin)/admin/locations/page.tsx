@@ -30,7 +30,14 @@ import {
 	FALLBACK_LOCATION_MAP,
 } from "@/data/locationConfig";
 import type { LocationRecord } from "@/data/locationConfig";
-import { DEFAULT_MEMBERSHIP_CONTENT, type MembershipFormContent } from "@/data/membershipContent";
+import {
+  DEFAULT_MEMBERSHIP_CONTENT,
+  DEFAULT_SEASON_LABELS,
+  MEMBERSHIP_SEASONS,
+  createDefaultSeasonalMembershipContent,
+  type MembershipFormContent,
+  type MembershipSeason,
+} from "@/data/membershipContent";
 import useLocations, { mergeLocationRecord } from "@/hooks/useLocations";
 import type Firebase from "@/lib/firebase/client";
 import { useFirebase } from "@/providers/FirebaseProvider";
@@ -56,7 +63,6 @@ import { Description, Field, Label } from "@/ui-kit/fieldset";
 import { Heading, Subheading } from "@/ui-kit/heading";
 import { Input } from "@/ui-kit/input";
 import { Switch, SwitchField } from "@/ui-kit/switch";
-import { Select } from "@/ui-kit/select";
 import {
   Table,
   TableBody,
@@ -81,7 +87,7 @@ import {
 	type SetStateAction,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, onSnapshot, setDoc } from "firebase/firestore";
+import { onSnapshot, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 
 type AdminTab =
@@ -150,6 +156,15 @@ type MembershipHeroImage = {
   storagePath?: string;
 };
 
+type MembershipSeasonFormState = {
+  label: string;
+  paymentUrl: string;
+  paymentLinks: Record<string, string>;
+  form: MembershipFormContent;
+};
+
+type SeasonalMembershipFormState = Record<MembershipSeason, MembershipSeasonFormState>;
+
 type BusinessSettingsFormState = {
   teesheetUrl?: string;
   membershipRegistrationUrl?: string;
@@ -157,6 +172,124 @@ type BusinessSettingsFormState = {
   membershipPaymentLinks?: Record<string, string> | null;
   membershipHeroImage?: MembershipHeroImage | null;
   membershipForm?: MembershipFormContent | null;
+  membershipSeasons?: SeasonalMembershipFormState | null;
+};
+
+const cloneMembershipContent = (value: MembershipFormContent): MembershipFormContent => ({
+  ...value,
+  paymentOptions: [...value.paymentOptions],
+  perks: [...value.perks],
+  details: [...value.details],
+  membershipTypes: [...value.membershipTypes],
+  enrollmentSteps: [...value.enrollmentSteps],
+});
+
+const createDefaultMembershipSeasonState = (): SeasonalMembershipFormState => {
+  const defaults = createDefaultSeasonalMembershipContent();
+  return {
+    winter: {
+      label: DEFAULT_SEASON_LABELS.winter,
+      paymentUrl: "",
+      paymentLinks: {},
+      form: cloneMembershipContent(defaults.winter),
+    },
+    summer: {
+      label: DEFAULT_SEASON_LABELS.summer,
+      paymentUrl: "",
+      paymentLinks: {},
+      form: cloneMembershipContent(defaults.summer),
+    },
+  };
+};
+
+const resolveMembershipSeasonState = (
+  seasonalValue: unknown,
+  legacyValue?: {
+    form?: MembershipFormContent | null;
+    paymentUrl?: string;
+    paymentLinks?: Record<string, string> | null;
+  },
+): SeasonalMembershipFormState => {
+  const defaults = createDefaultMembershipSeasonState();
+  const seasonalRecord = resolveRecordValue(seasonalValue);
+  const hasSeasonalRecord = Boolean(seasonalRecord);
+
+  const next = { ...defaults } as SeasonalMembershipFormState;
+
+  MEMBERSHIP_SEASONS.forEach((season) => {
+    const seasonDefaults = defaults[season];
+    const seasonRecord = resolveRecordValue(seasonalRecord?.[season]);
+    const rawForm = resolveRecordValue(seasonRecord?.form);
+    const mergedForm = {
+      ...seasonDefaults.form,
+      ...(!hasSeasonalRecord && legacyValue?.form ? legacyValue.form : {}),
+      ...(rawForm ?? {}),
+    } as MembershipFormContent;
+
+    const cleanMembershipTypes = Array.isArray(mergedForm.membershipTypes)
+      ? mergedForm.membershipTypes.filter(
+          (entry): entry is string =>
+            typeof entry === "string" && entry.trim().length > 0,
+        )
+      : [...seasonDefaults.form.membershipTypes];
+
+    const paymentLinksRecord = resolveRecordValue(seasonRecord?.paymentLinks);
+    const legacyLinks =
+      !hasSeasonalRecord && legacyValue?.paymentLinks
+        ? legacyValue.paymentLinks
+        : null;
+    const candidateLinks = (paymentLinksRecord ?? legacyLinks ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const cleanLinks: Record<string, string> = {};
+
+    cleanMembershipTypes.forEach((type) => {
+      const value = candidateLinks[type];
+      if (typeof value === "string" && value.trim()) {
+        cleanLinks[type] = value.trim();
+      }
+    });
+
+    next[season] = {
+      label:
+        (typeof seasonRecord?.label === "string" && seasonRecord.label.trim()) ||
+        seasonDefaults.label,
+      paymentUrl:
+        (typeof seasonRecord?.paymentUrl === "string" &&
+          seasonRecord.paymentUrl.trim()) ||
+        (!hasSeasonalRecord && legacyValue?.paymentUrl
+          ? legacyValue.paymentUrl.trim()
+          : ""),
+      paymentLinks: cleanLinks,
+      form: {
+        ...mergedForm,
+        paymentOptions: Array.isArray(mergedForm.paymentOptions)
+          ? mergedForm.paymentOptions
+              .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+              .filter(Boolean)
+          : [...seasonDefaults.form.paymentOptions],
+        perks: Array.isArray(mergedForm.perks)
+          ? mergedForm.perks
+              .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+              .filter(Boolean)
+          : [...seasonDefaults.form.perks],
+        details: Array.isArray(mergedForm.details)
+          ? mergedForm.details
+              .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+              .filter(Boolean)
+          : [...seasonDefaults.form.details],
+        membershipTypes: cleanMembershipTypes,
+        enrollmentSteps: Array.isArray(mergedForm.enrollmentSteps)
+          ? mergedForm.enrollmentSteps
+              .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+              .filter(Boolean)
+          : [...seasonDefaults.form.enrollmentSteps],
+      },
+    };
+  });
+
+  return next;
 };
 
 const BUSINESS_DEFAULT_STATE: BusinessSettingsFormState = {
@@ -166,6 +299,7 @@ const BUSINESS_DEFAULT_STATE: BusinessSettingsFormState = {
   membershipPaymentLinks: {},
   membershipHeroImage: null,
   membershipForm: { ...DEFAULT_MEMBERSHIP_CONTENT },
+  membershipSeasons: createDefaultMembershipSeasonState(),
 };
 
 const cloneBusinessSettingsState = (
@@ -193,6 +327,22 @@ const cloneBusinessSettingsState = (
             ...parsed.membershipForm,
           }
         : { ...DEFAULT_MEMBERSHIP_CONTENT },
+      membershipSeasons: resolveMembershipSeasonState(parsed?.membershipSeasons, {
+        form: parsed?.membershipForm
+          ? {
+              ...DEFAULT_MEMBERSHIP_CONTENT,
+              ...parsed.membershipForm,
+            }
+          : { ...DEFAULT_MEMBERSHIP_CONTENT },
+        paymentUrl:
+          typeof parsed?.membershipPaymentUrl === "string"
+            ? parsed.membershipPaymentUrl
+            : "",
+        paymentLinks:
+          parsed?.membershipPaymentLinks && typeof parsed.membershipPaymentLinks === "object"
+            ? { ...(parsed.membershipPaymentLinks as Record<string, string>) }
+            : {},
+      }),
     };
   } catch (error) {
     console.warn("[LocationsAdmin] failed to clone business state", error);
@@ -212,6 +362,22 @@ const cloneBusinessSettingsState = (
             ...value.membershipForm,
           }
         : { ...DEFAULT_MEMBERSHIP_CONTENT },
+      membershipSeasons: resolveMembershipSeasonState(value?.membershipSeasons, {
+        form: value?.membershipForm
+          ? {
+              ...DEFAULT_MEMBERSHIP_CONTENT,
+              ...value.membershipForm,
+            }
+          : { ...DEFAULT_MEMBERSHIP_CONTENT },
+        paymentUrl:
+          typeof value?.membershipPaymentUrl === "string"
+            ? value.membershipPaymentUrl
+            : "",
+        paymentLinks:
+          value?.membershipPaymentLinks && typeof value.membershipPaymentLinks === "object"
+            ? { ...(value.membershipPaymentLinks as Record<string, string>) }
+            : {},
+      }),
     };
   }
 };
@@ -270,12 +436,6 @@ function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
     typeof form?.teesheetUrl === "string" ? form.teesheetUrl.trim() : "";
   payload.teesheetUrl = teesheetValue || null;
 
-  const paymentValue =
-    typeof form?.membershipPaymentUrl === "string"
-      ? form.membershipPaymentUrl.trim()
-      : "";
-  payload.membershipPaymentUrl = paymentValue || null;
-
   const heroUrl = form?.membershipHeroImage?.url?.trim();
   if (heroUrl) {
     payload.membershipHeroImage = {
@@ -294,71 +454,90 @@ function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
       : fallback;
 
   const rawMembershipForm = form?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT;
-  const membershipTypes = sanitizeList(
-    rawMembershipForm.membershipTypes,
-    [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes],
+  const seasonal = resolveMembershipSeasonState(form?.membershipSeasons, {
+    form: rawMembershipForm,
+    paymentUrl:
+      typeof form?.membershipPaymentUrl === "string"
+        ? form.membershipPaymentUrl
+        : "",
+    paymentLinks:
+      form?.membershipPaymentLinks && typeof form.membershipPaymentLinks === "object"
+        ? form.membershipPaymentLinks
+        : {},
+  });
+
+  const sanitizeMembershipFormContent = (
+    value: MembershipFormContent,
+    fallback: MembershipFormContent,
+  ): MembershipFormContent => ({
+    formTitle: sanitizeText(value.formTitle, fallback.formTitle),
+    formDescription: sanitizeText(value.formDescription, fallback.formDescription),
+    agreementTitle: sanitizeText(value.agreementTitle, fallback.agreementTitle),
+    paymentOptions: sanitizeList(value.paymentOptions, [...fallback.paymentOptions]),
+    perksTitle: sanitizeText(value.perksTitle, fallback.perksTitle),
+    perks: sanitizeList(value.perks, [...fallback.perks]),
+    detailsTitle: sanitizeText(value.detailsTitle, fallback.detailsTitle),
+    details: sanitizeList(value.details, [...fallback.details]),
+    membershipTypeLabel: sanitizeText(value.membershipTypeLabel, fallback.membershipTypeLabel),
+    membershipTypes: sanitizeList(value.membershipTypes, [...fallback.membershipTypes]),
+    successTitle: sanitizeText(value.successTitle, fallback.successTitle),
+    successMessage: sanitizeText(value.successMessage, fallback.successMessage),
+    paymentLinkLabel: sanitizeText(value.paymentLinkLabel, fallback.paymentLinkLabel),
+    enrollmentTitle: sanitizeText(value.enrollmentTitle, fallback.enrollmentTitle),
+    enrollmentSteps: sanitizeList(value.enrollmentSteps, [...fallback.enrollmentSteps]),
+  });
+
+  const defaultSeasonContent = createDefaultSeasonalMembershipContent();
+  const seasonalPayload = MEMBERSHIP_SEASONS.reduce(
+    (acc, season) => {
+      const seasonState = seasonal[season];
+      const cleanedForm = sanitizeMembershipFormContent(
+        seasonState.form,
+        defaultSeasonContent[season],
+      );
+      const cleanedLinks: Record<string, string> = {};
+
+      cleanedForm.membershipTypes.forEach((type) => {
+        const candidate = seasonState.paymentLinks[type];
+        if (typeof candidate === "string" && candidate.trim()) {
+          cleanedLinks[type] = candidate.trim();
+        }
+      });
+
+      acc[season] = {
+        label: sanitizeText(seasonState.label, DEFAULT_SEASON_LABELS[season]),
+        paymentUrl:
+          typeof seasonState.paymentUrl === "string" && seasonState.paymentUrl.trim()
+            ? seasonState.paymentUrl.trim()
+            : null,
+        paymentLinks: Object.keys(cleanedLinks).length ? cleanedLinks : null,
+        form: cleanedForm,
+      };
+      return acc;
+    },
+    {} as Record<MembershipSeason, Record<string, unknown>>,
   );
-  const rawPaymentLinks =
-    form?.membershipPaymentLinks && typeof form.membershipPaymentLinks === "object"
-      ? (form.membershipPaymentLinks as Record<string, unknown>)
+  payload.membershipSeasons = seasonalPayload;
+
+  const winterSeason = seasonal.winter;
+  const winterForm = sanitizeMembershipFormContent(
+    winterSeason.form,
+    DEFAULT_MEMBERSHIP_CONTENT,
+  );
+  const winterLinks: Record<string, string> = {};
+  winterForm.membershipTypes.forEach((type) => {
+    const candidate = winterSeason.paymentLinks[type];
+    if (typeof candidate === "string" && candidate.trim()) {
+      winterLinks[type] = candidate.trim();
+    }
+  });
+
+  payload.membershipPaymentUrl =
+    typeof winterSeason.paymentUrl === "string" && winterSeason.paymentUrl.trim()
+      ? winterSeason.paymentUrl.trim()
       : null;
-  if (rawPaymentLinks) {
-    const cleanedLinks: Record<string, string> = {};
-    membershipTypes.forEach((type) => {
-      const candidate = rawPaymentLinks[type];
-      if (typeof candidate === "string" && candidate.trim()) {
-        cleanedLinks[type] = candidate.trim();
-      }
-    });
-    payload.membershipPaymentLinks =
-      Object.keys(cleanedLinks).length > 0 ? cleanedLinks : null;
-  } else {
-    payload.membershipPaymentLinks = null;
-  }
-  payload.membershipForm = {
-    formTitle: sanitizeText(rawMembershipForm.formTitle, DEFAULT_MEMBERSHIP_CONTENT.formTitle),
-    formDescription: sanitizeText(
-      rawMembershipForm.formDescription,
-      DEFAULT_MEMBERSHIP_CONTENT.formDescription,
-    ),
-    agreementTitle: sanitizeText(
-      rawMembershipForm.agreementTitle,
-      DEFAULT_MEMBERSHIP_CONTENT.agreementTitle,
-    ),
-    paymentOptions: sanitizeList(
-      rawMembershipForm.paymentOptions,
-      [...DEFAULT_MEMBERSHIP_CONTENT.paymentOptions],
-    ),
-    perksTitle: sanitizeText(rawMembershipForm.perksTitle, DEFAULT_MEMBERSHIP_CONTENT.perksTitle),
-    perks: sanitizeList(rawMembershipForm.perks, [...DEFAULT_MEMBERSHIP_CONTENT.perks]),
-    detailsTitle: sanitizeText(rawMembershipForm.detailsTitle, DEFAULT_MEMBERSHIP_CONTENT.detailsTitle),
-    details: sanitizeList(rawMembershipForm.details, [...DEFAULT_MEMBERSHIP_CONTENT.details]),
-    membershipTypeLabel: sanitizeText(
-      rawMembershipForm.membershipTypeLabel,
-      DEFAULT_MEMBERSHIP_CONTENT.membershipTypeLabel,
-    ),
-    membershipTypes,
-    successTitle: sanitizeText(
-      rawMembershipForm.successTitle,
-      DEFAULT_MEMBERSHIP_CONTENT.successTitle,
-    ),
-    successMessage: sanitizeText(
-      rawMembershipForm.successMessage,
-      DEFAULT_MEMBERSHIP_CONTENT.successMessage,
-    ),
-    paymentLinkLabel: sanitizeText(
-      rawMembershipForm.paymentLinkLabel,
-      DEFAULT_MEMBERSHIP_CONTENT.paymentLinkLabel,
-    ),
-    enrollmentTitle: sanitizeText(
-      rawMembershipForm.enrollmentTitle,
-      DEFAULT_MEMBERSHIP_CONTENT.enrollmentTitle,
-    ),
-    enrollmentSteps: sanitizeList(
-      rawMembershipForm.enrollmentSteps,
-      [...DEFAULT_MEMBERSHIP_CONTENT.enrollmentSteps],
-    ),
-  };
+  payload.membershipPaymentLinks = Object.keys(winterLinks).length > 0 ? winterLinks : null;
+  payload.membershipForm = winterForm;
 
   return payload;
 }
@@ -529,6 +708,10 @@ function useBusinessSettingsAdminState(firebase: Firebase): BusinessAdminState {
             data?.membershipForm && typeof data.membershipForm === "object"
               ? data.membershipForm
               : {};
+          const membershipSeasons =
+            data?.membershipSeasons && typeof data.membershipSeasons === "object"
+              ? data.membershipSeasons
+              : null;
 
           const nextState = cloneBusinessSettingsState({
             teesheetUrl,
@@ -540,6 +723,14 @@ function useBusinessSettingsAdminState(firebase: Firebase): BusinessAdminState {
               ...DEFAULT_MEMBERSHIP_CONTENT,
               ...membershipFormData,
             },
+            membershipSeasons: resolveMembershipSeasonState(membershipSeasons, {
+              form: {
+                ...DEFAULT_MEMBERSHIP_CONTENT,
+                ...membershipFormData,
+              },
+              paymentUrl: membershipPaymentUrl,
+              paymentLinks: membershipPaymentLinks,
+            }),
           });
           setForm(nextState);
           setInitial(nextState);
@@ -1468,8 +1659,11 @@ function BusinessSettingsPanel({
     status: "idle",
   });
   const heroInputId = useId();
-  const membershipForm = form?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT;
-  const membershipPaymentLinks = form?.membershipPaymentLinks ?? {};
+  const membershipSeasons = resolveMembershipSeasonState(form?.membershipSeasons, {
+    form: form?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+    paymentUrl: form?.membershipPaymentUrl ?? "",
+    paymentLinks: form?.membershipPaymentLinks ?? {},
+  });
 
   const listToText = (value: string[]) => value.join("\n");
   const textToList = (value: string) =>
@@ -1479,13 +1673,30 @@ function BusinessSettingsPanel({
       .filter(Boolean);
 
   const updateMembershipForm = useCallback(
-    (field: keyof MembershipFormContent, value: string | string[]) => {
+    (season: MembershipSeason, field: keyof MembershipFormContent, value: string | string[]) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipForm: {
-          ...DEFAULT_MEMBERSHIP_CONTENT,
-          ...(prev?.membershipForm ?? {}),
-          [field]: value,
+        membershipSeasons: {
+          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+            paymentUrl: prev?.membershipPaymentUrl ?? "",
+            paymentLinks: prev?.membershipPaymentLinks ?? {},
+          }),
+          [season]: {
+            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+              paymentUrl: prev?.membershipPaymentUrl ?? "",
+              paymentLinks: prev?.membershipPaymentLinks ?? {},
+            })[season],
+            form: {
+              ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+                form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+                paymentUrl: prev?.membershipPaymentUrl ?? "",
+                paymentLinks: prev?.membershipPaymentLinks ?? {},
+              })[season].form,
+              [field]: value,
+            },
+          },
         },
       }));
     },
@@ -1502,23 +1713,79 @@ function BusinessSettingsPanel({
     [setForm],
   );
 
-  const handlePaymentLinkChange = useCallback(
-    (value: string) => {
+  const handleSeasonPaymentLinkChange = useCallback(
+    (season: MembershipSeason, value: string) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipPaymentUrl: value,
+        membershipSeasons: {
+          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+            paymentUrl: prev?.membershipPaymentUrl ?? "",
+            paymentLinks: prev?.membershipPaymentLinks ?? {},
+          }),
+          [season]: {
+            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+              paymentUrl: prev?.membershipPaymentUrl ?? "",
+              paymentLinks: prev?.membershipPaymentLinks ?? {},
+            })[season],
+            paymentUrl: value,
+          },
+        },
       }));
     },
     [setForm],
   );
 
   const handlePaymentLinkOverrideChange = useCallback(
-    (membershipType: string, value: string) => {
+    (season: MembershipSeason, membershipType: string, value: string) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipPaymentLinks: {
-          ...(prev?.membershipPaymentLinks ?? {}),
-          [membershipType]: value,
+        membershipSeasons: {
+          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+            paymentUrl: prev?.membershipPaymentUrl ?? "",
+            paymentLinks: prev?.membershipPaymentLinks ?? {},
+          }),
+          [season]: {
+            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+              paymentUrl: prev?.membershipPaymentUrl ?? "",
+              paymentLinks: prev?.membershipPaymentLinks ?? {},
+            })[season],
+            paymentLinks: {
+              ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+                form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+                paymentUrl: prev?.membershipPaymentUrl ?? "",
+                paymentLinks: prev?.membershipPaymentLinks ?? {},
+              })[season].paymentLinks,
+              [membershipType]: value,
+            },
+          },
+        },
+      }));
+    },
+    [setForm],
+  );
+
+  const handleSeasonLabelChange = useCallback(
+    (season: MembershipSeason, value: string) => {
+      setForm((prev) => ({
+        ...(prev ?? {}),
+        membershipSeasons: {
+          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+            paymentUrl: prev?.membershipPaymentUrl ?? "",
+            paymentLinks: prev?.membershipPaymentLinks ?? {},
+          }),
+          [season]: {
+            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
+              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+              paymentUrl: prev?.membershipPaymentUrl ?? "",
+              paymentLinks: prev?.membershipPaymentLinks ?? {},
+            })[season],
+            label: value,
+          },
         },
       }));
     },
@@ -1678,46 +1945,6 @@ function BusinessSettingsPanel({
 
         {activeTab === "membership" ? (
           <div className="space-y-6">
-            <FormField
-              label="Membership payment link"
-              hint="Shown after form submission so members can complete payment."
-            >
-              <Input
-                id="business-membership-payment-link"
-                type="url"
-                inputMode="url"
-                autoComplete="off"
-                placeholder="https://example.com/checkout"
-                value={form?.membershipPaymentUrl ?? ""}
-                onChange={(event) => handlePaymentLinkChange(event.target.value)}
-                disabled={loading}
-              />
-            </FormField>
-
-            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
-                Payment links by membership type
-              </Subheading>
-              <Text className="text-xs text-white/60">
-                Optional overrides for each membership type. If empty, the default payment link is used.
-              </Text>
-              <div className="space-y-4">
-                {membershipForm.membershipTypes.map((type) => (
-                  <FormField key={type} label={type}>
-                    <Input
-                      type="url"
-                      inputMode="url"
-                      autoComplete="off"
-                      placeholder="https://example.com/checkout"
-                      value={membershipPaymentLinks[type] ?? ""}
-                      onChange={(event) => handlePaymentLinkOverrideChange(type, event.target.value)}
-                      disabled={loading}
-                    />
-                  </FormField>
-                ))}
-              </div>
-            </div>
-
             <div className="space-y-4">
               <div className="space-y-2">
                 <Text className="text-xs uppercase tracking-wide text-white/60">
@@ -1793,164 +2020,277 @@ function BusinessSettingsPanel({
               </div>
             </div>
 
-            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
-                Form Copy
-              </Subheading>
-              <FormField label="Form title">
-                <Input
-                  type="text"
-                  value={membershipForm.formTitle}
-                  onChange={(event) => updateMembershipForm("formTitle", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Form description">
-                <Textarea
-                  rows={3}
-                  value={membershipForm.formDescription}
-                  onChange={(event) => updateMembershipForm("formDescription", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-            </div>
+            <div className="grid gap-6 xl:grid-cols-2">
+              {MEMBERSHIP_SEASONS.map((season) => {
+                const seasonState = membershipSeasons[season];
+                const membershipForm = seasonState.form;
 
-            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
-                Agreement Copy
-              </Subheading>
-              <FormField label="Agreement title">
-                <Input
-                  type="text"
-                  value={membershipForm.agreementTitle}
-                  onChange={(event) => updateMembershipForm("agreementTitle", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Payment options" hint="One option per line.">
-                <Textarea
-                  rows={4}
-                  value={listToText(membershipForm.paymentOptions)}
-                  onChange={(event) =>
-                    updateMembershipForm("paymentOptions", textToList(event.target.value))
-                  }
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Perks title">
-                <Input
-                  type="text"
-                  value={membershipForm.perksTitle}
-                  onChange={(event) => updateMembershipForm("perksTitle", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Perks list" hint="One perk per line.">
-                <Textarea
-                  rows={5}
-                  value={listToText(membershipForm.perks)}
-                  onChange={(event) =>
-                    updateMembershipForm("perks", textToList(event.target.value))
-                  }
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Details title">
-                <Input
-                  type="text"
-                  value={membershipForm.detailsTitle}
-                  onChange={(event) => updateMembershipForm("detailsTitle", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Details list" hint="One detail per line.">
-                <Textarea
-                  rows={5}
-                  value={listToText(membershipForm.details)}
-                  onChange={(event) =>
-                    updateMembershipForm("details", textToList(event.target.value))
-                  }
-                  disabled={loading}
-                />
-              </FormField>
-            </div>
+                return (
+                  <div
+                    key={season}
+                    className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4"
+                  >
+                    <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                      {season === "winter" ? "Winter Membership" : "Summer Membership"}
+                    </Subheading>
 
-            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
-                Membership Types
-              </Subheading>
-              <FormField label="Membership type label">
-                <Input
-                  type="text"
-                  value={membershipForm.membershipTypeLabel}
-                  onChange={(event) => updateMembershipForm("membershipTypeLabel", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Membership types" hint="One option per line.">
-                <Textarea
-                  rows={4}
-                  value={listToText(membershipForm.membershipTypes)}
-                  onChange={(event) =>
-                    updateMembershipForm("membershipTypes", textToList(event.target.value))
-                  }
-                  disabled={loading}
-                />
-              </FormField>
-            </div>
+                    <FormField
+                      label="Season label"
+                      hint="Shown publicly above this membership section."
+                    >
+                      <Input
+                        type="text"
+                        value={seasonState.label}
+                        onChange={(event) => handleSeasonLabelChange(season, event.target.value)}
+                        disabled={loading}
+                      />
+                    </FormField>
 
-            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
-                Enrollment Copy
-              </Subheading>
-              <FormField label="Enrollment title">
-                <Input
-                  type="text"
-                  value={membershipForm.enrollmentTitle}
-                  onChange={(event) => updateMembershipForm("enrollmentTitle", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Enrollment steps" hint="One step per line.">
-                <Textarea
-                  rows={3}
-                  value={listToText(membershipForm.enrollmentSteps)}
-                  onChange={(event) =>
-                    updateMembershipForm("enrollmentSteps", textToList(event.target.value))
-                  }
-                  disabled={loading}
-                />
-              </FormField>
-            </div>
+                    <FormField
+                      label="Membership payment link"
+                      hint="Shown after submission when a type-specific link is not set."
+                    >
+                      <Input
+                        type="url"
+                        inputMode="url"
+                        autoComplete="off"
+                        placeholder="https://example.com/checkout"
+                        value={seasonState.paymentUrl}
+                        onChange={(event) =>
+                          handleSeasonPaymentLinkChange(season, event.target.value)
+                        }
+                        disabled={loading}
+                      />
+                    </FormField>
 
-            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
-                Confirmation Copy
-              </Subheading>
-              <FormField label="Success title">
-                <Input
-                  type="text"
-                  value={membershipForm.successTitle}
-                  onChange={(event) => updateMembershipForm("successTitle", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Success message">
-                <Textarea
-                  rows={3}
-                  value={membershipForm.successMessage}
-                  onChange={(event) => updateMembershipForm("successMessage", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
-              <FormField label="Payment link label">
-                <Input
-                  type="text"
-                  value={membershipForm.paymentLinkLabel}
-                  onChange={(event) => updateMembershipForm("paymentLinkLabel", event.target.value)}
-                  disabled={loading}
-                />
-              </FormField>
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Payment links by membership type
+                      </Subheading>
+                      <Text className="text-xs text-white/60">
+                        Optional overrides for each membership type.
+                      </Text>
+                      <div className="space-y-4">
+                        {membershipForm.membershipTypes.map((type) => (
+                          <FormField key={`${season}-${type}`} label={type}>
+                            <Input
+                              type="url"
+                              inputMode="url"
+                              autoComplete="off"
+                              placeholder="https://example.com/checkout"
+                              value={seasonState.paymentLinks[type] ?? ""}
+                              onChange={(event) =>
+                                handlePaymentLinkOverrideChange(
+                                  season,
+                                  type,
+                                  event.target.value,
+                                )
+                              }
+                              disabled={loading}
+                            />
+                          </FormField>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Form Copy
+                      </Subheading>
+                      <FormField label="Form title">
+                        <Input
+                          type="text"
+                          value={membershipForm.formTitle}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "formTitle", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Form description">
+                        <Textarea
+                          rows={3}
+                          value={membershipForm.formDescription}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "formDescription", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                    </div>
+
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Agreement Copy
+                      </Subheading>
+                      <FormField label="Agreement title">
+                        <Input
+                          type="text"
+                          value={membershipForm.agreementTitle}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "agreementTitle", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Payment options" hint="One option per line.">
+                        <Textarea
+                          rows={4}
+                          value={listToText(membershipForm.paymentOptions)}
+                          onChange={(event) =>
+                            updateMembershipForm(
+                              season,
+                              "paymentOptions",
+                              textToList(event.target.value),
+                            )
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Perks title">
+                        <Input
+                          type="text"
+                          value={membershipForm.perksTitle}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "perksTitle", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Perks list" hint="One perk per line.">
+                        <Textarea
+                          rows={5}
+                          value={listToText(membershipForm.perks)}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "perks", textToList(event.target.value))
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Details title">
+                        <Input
+                          type="text"
+                          value={membershipForm.detailsTitle}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "detailsTitle", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Details list" hint="One detail per line.">
+                        <Textarea
+                          rows={5}
+                          value={listToText(membershipForm.details)}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "details", textToList(event.target.value))
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                    </div>
+
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Membership Types
+                      </Subheading>
+                      <FormField label="Membership type label">
+                        <Input
+                          type="text"
+                          value={membershipForm.membershipTypeLabel}
+                          onChange={(event) =>
+                            updateMembershipForm(
+                              season,
+                              "membershipTypeLabel",
+                              event.target.value,
+                            )
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Membership types" hint="One option per line.">
+                        <Textarea
+                          rows={4}
+                          value={listToText(membershipForm.membershipTypes)}
+                          onChange={(event) =>
+                            updateMembershipForm(
+                              season,
+                              "membershipTypes",
+                              textToList(event.target.value),
+                            )
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                    </div>
+
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Enrollment Copy
+                      </Subheading>
+                      <FormField label="Enrollment title">
+                        <Input
+                          type="text"
+                          value={membershipForm.enrollmentTitle}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "enrollmentTitle", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Enrollment steps" hint="One step per line.">
+                        <Textarea
+                          rows={3}
+                          value={listToText(membershipForm.enrollmentSteps)}
+                          onChange={(event) =>
+                            updateMembershipForm(
+                              season,
+                              "enrollmentSteps",
+                              textToList(event.target.value),
+                            )
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                    </div>
+
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Confirmation Copy
+                      </Subheading>
+                      <FormField label="Success title">
+                        <Input
+                          type="text"
+                          value={membershipForm.successTitle}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "successTitle", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Success message">
+                        <Textarea
+                          rows={3}
+                          value={membershipForm.successMessage}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "successMessage", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <FormField label="Payment link label">
+                        <Input
+                          type="text"
+                          value={membershipForm.paymentLinkLabel}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "paymentLinkLabel", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : null}
