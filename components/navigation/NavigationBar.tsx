@@ -18,6 +18,7 @@ const desktopLogo = "/assets/Bunker_Trademarked_Desktop.png";
 const mobileLogo = "/assets/bunker-logo-mobile-site.svg";
 const GIFT_CARD_URL =
   "https://www.clover.com/online-ordering/the-bunker-guilderland/giftcard";
+const FRANCHISE_URL = "https://bunkerfranchise.com";
 
 const navItems = [
   { type: "link", href: ROUTES.LANDING, label: "Home" },
@@ -392,6 +393,14 @@ export function NavigationBar() {
                 </div>
               ),
             )}
+            <a
+              href={FRANCHISE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 rounded-full bg-primary px-4 py-2 text-center font-semibold uppercase tracking-wide text-white shadow-[0_0_24px_rgba(220,38,38,0.45)] transition hover:bg-primary-dark"
+            >
+              Franchise Today
+            </a>
           </nav>
 
           <div className="mt-auto space-y-4 text-white">

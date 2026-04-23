@@ -16,6 +16,7 @@ import { getDocs, type DocumentData, type QueryDocumentSnapshot } from "firebase
 
 const DESKTOP_VIDEO = "/assets/Bunker_Homepage_Video_1920x1080.mp4";
 const MOBILE_VIDEO = "/assets/Bunker_Homepage_Video_Mobile.mp4";
+const FRANCHISE_URL = "https://bunkerfranchise.com";
 
 type TourVideo = {
   src: string;
@@ -172,6 +173,13 @@ export default function LandingPage() {
             <BookEventsButton className="w-full" />
             <BookLessonsButton className="w-full" />
             <LocationSelector className="w-full" />
+          </div>
+          <div className="-mt-3 flex w-full justify-center sm:mt-0">
+            <ExternalLinkButton
+              title="START FRANCHISING YOUR OWN BUNKER"
+              url={FRANCHISE_URL}
+              className="w-full text-sm tracking-wide sm:w-[calc((100%-0.75rem)/2)] xl:w-[calc((100%-2.25rem)/4)]"
+            />
           </div>
         </div>
       </section>
