@@ -36,6 +36,8 @@ import {
   MEMBERSHIP_SEASONS,
   createDefaultSeasonalMembershipContent,
   type MembershipFormContent,
+  type MembershipPlan,
+  type MembershipSectionVisibility,
   type MembershipSeason,
 } from "@/data/membershipContent";
 import useLocations, { mergeLocationRecord } from "@/hooks/useLocations";
@@ -178,11 +180,83 @@ type BusinessSettingsFormState = {
 const cloneMembershipContent = (value: MembershipFormContent): MembershipFormContent => ({
   ...value,
   paymentOptions: [...value.paymentOptions],
+  plans: value.plans.map((plan) => ({
+    ...plan,
+    features: [...plan.features],
+  })),
   perks: [...value.perks],
   details: [...value.details],
+  sectionVisibility: {
+    ...value.sectionVisibility,
+  },
   membershipTypes: [...value.membershipTypes],
   enrollmentSteps: [...value.enrollmentSteps],
 });
+
+const MEMBERSHIP_SECTION_VISIBILITY_KEYS: Array<keyof MembershipSectionVisibility> = [
+  "paymentOptions",
+  "plans",
+  "perks",
+  "details",
+  "enrollment",
+];
+
+const sanitizeMembershipPlans = (
+  value: unknown,
+  fallback: MembershipPlan[],
+  options?: { keepEmpty?: boolean },
+) => {
+  const keepEmpty = Boolean(options?.keepEmpty);
+  if (!Array.isArray(value)) {
+    return fallback.map((plan) => ({ ...plan, features: [...plan.features] }));
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const candidate = entry as Partial<MembershipPlan>;
+      const features = Array.isArray(candidate.features)
+        ? candidate.features
+            .map((feature) => (typeof feature === "string" ? feature.trim() : ""))
+            .filter(Boolean)
+        : [];
+
+      const plan: MembershipPlan = {
+        name: typeof candidate.name === "string" ? candidate.name.trim() : "",
+        price: typeof candidate.price === "string" ? candidate.price.trim() : "",
+        features,
+        bestFor: typeof candidate.bestFor === "string" ? candidate.bestFor.trim() : "",
+      };
+
+      if (!keepEmpty && !plan.name && !plan.price && !plan.bestFor && !plan.features.length) {
+        return null;
+      }
+
+      return plan;
+    })
+    .filter((entry): entry is MembershipPlan => Boolean(entry));
+};
+
+const sanitizeMembershipSectionVisibility = (
+  value: unknown,
+  fallback: MembershipSectionVisibility,
+): MembershipSectionVisibility => {
+  if (!value || typeof value !== "object") {
+    return { ...fallback };
+  }
+
+  const candidate = value as Partial<MembershipSectionVisibility>;
+  return MEMBERSHIP_SECTION_VISIBILITY_KEYS.reduce(
+    (acc, key) => ({
+      ...acc,
+      [key]: typeof candidate[key] === "boolean" ? candidate[key] : fallback[key],
+    }),
+    { ...fallback },
+  );
+};
 
 const createDefaultMembershipSeasonState = (): SeasonalMembershipFormState => {
   const defaults = createDefaultSeasonalMembershipContent();
@@ -269,6 +343,9 @@ const resolveMembershipSeasonState = (
               .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
               .filter(Boolean)
           : [...seasonDefaults.form.paymentOptions],
+        plans: sanitizeMembershipPlans(mergedForm.plans, seasonDefaults.form.plans, {
+          keepEmpty: true,
+        }),
         perks: Array.isArray(mergedForm.perks)
           ? mergedForm.perks
               .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
@@ -279,6 +356,10 @@ const resolveMembershipSeasonState = (
               .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
               .filter(Boolean)
           : [...seasonDefaults.form.details],
+        sectionVisibility: sanitizeMembershipSectionVisibility(
+          mergedForm.sectionVisibility,
+          seasonDefaults.form.sectionVisibility,
+        ),
         membershipTypes: cleanMembershipTypes,
         enrollmentSteps: Array.isArray(mergedForm.enrollmentSteps)
           ? mergedForm.enrollmentSteps
@@ -474,10 +555,16 @@ function sanitizeBusinessSettings(form: BusinessSettingsFormState | null) {
     formDescription: sanitizeText(value.formDescription, fallback.formDescription),
     agreementTitle: sanitizeText(value.agreementTitle, fallback.agreementTitle),
     paymentOptions: sanitizeList(value.paymentOptions, [...fallback.paymentOptions]),
+    plansTitle: sanitizeText(value.plansTitle, fallback.plansTitle),
+    plans: sanitizeMembershipPlans(value.plans, fallback.plans),
     perksTitle: sanitizeText(value.perksTitle, fallback.perksTitle),
     perks: sanitizeList(value.perks, [...fallback.perks]),
     detailsTitle: sanitizeText(value.detailsTitle, fallback.detailsTitle),
     details: sanitizeList(value.details, [...fallback.details]),
+    sectionVisibility: sanitizeMembershipSectionVisibility(
+      value.sectionVisibility,
+      fallback.sectionVisibility,
+    ),
     membershipTypeLabel: sanitizeText(value.membershipTypeLabel, fallback.membershipTypeLabel),
     membershipTypes: sanitizeList(value.membershipTypes, [...fallback.membershipTypes]),
     successTitle: sanitizeText(value.successTitle, fallback.successTitle),
@@ -1655,6 +1742,8 @@ function BusinessSettingsPanel({
   onResetNotice,
 }: BusinessSettingsPanelProps) {
   const [activeTab, setActiveTab] = useState<"general" | "membership" | "notices">("general");
+  const [activeMembershipSeason, setActiveMembershipSeason] =
+    useState<MembershipSeason>("winter");
   const [heroUpload, setHeroUpload] = useState<{ status: "idle" | "uploading" | "success" | "error"; message?: string }>({
     status: "idle",
   });
@@ -1671,34 +1760,155 @@ function BusinessSettingsPanel({
       .split("\n")
       .map((entry) => entry.trim())
       .filter(Boolean);
+  const sectionLabels: Record<keyof MembershipSectionVisibility, string> = {
+    paymentOptions: "Payment options",
+    plans: "Membership plans",
+    perks: "Perks",
+    details: "Details",
+    enrollment: "Enrollment",
+  };
+  const activeMembershipSeasonState = membershipSeasons[activeMembershipSeason];
+  const activeMembershipForm = activeMembershipSeasonState.form;
+
+  const getResolvedMembershipSeasons = (
+    prev: BusinessSettingsFormState | null | undefined,
+  ) =>
+    resolveMembershipSeasonState(prev?.membershipSeasons, {
+      form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
+      paymentUrl: prev?.membershipPaymentUrl ?? "",
+      paymentLinks: prev?.membershipPaymentLinks ?? {},
+    });
 
   const updateMembershipForm = useCallback(
-    (season: MembershipSeason, field: keyof MembershipFormContent, value: string | string[]) => {
+    (season: MembershipSeason, field: keyof MembershipFormContent, value: unknown) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipSeasons: {
-          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-            paymentUrl: prev?.membershipPaymentUrl ?? "",
-            paymentLinks: prev?.membershipPaymentLinks ?? {},
-          }),
-          [season]: {
-            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-              paymentUrl: prev?.membershipPaymentUrl ?? "",
-              paymentLinks: prev?.membershipPaymentLinks ?? {},
-            })[season],
-            form: {
-              ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-                form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-                paymentUrl: prev?.membershipPaymentUrl ?? "",
-                paymentLinks: prev?.membershipPaymentLinks ?? {},
-              })[season].form,
-              [field]: value,
+        membershipSeasons: (() => {
+          const resolved = getResolvedMembershipSeasons(prev);
+          return {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              form: {
+                ...resolved[season].form,
+                [field]: value,
+              },
+            },
+          };
+        })(),
+      }));
+    },
+    [setForm],
+  );
+
+  const updateMembershipSectionVisibility = useCallback(
+    (
+      season: MembershipSeason,
+      section: keyof MembershipSectionVisibility,
+      show: boolean,
+    ) => {
+      setForm((prev) => {
+        const resolved = getResolvedMembershipSeasons(prev);
+        return {
+          ...(prev ?? {}),
+          membershipSeasons: {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              form: {
+                ...resolved[season].form,
+                sectionVisibility: {
+                  ...resolved[season].form.sectionVisibility,
+                  [section]: show,
+                },
+              },
             },
           },
-        },
-      }));
+        };
+      });
+    },
+    [setForm],
+  );
+
+  const updateMembershipPlan = useCallback(
+    (
+      season: MembershipSeason,
+      planIndex: number,
+      field: keyof MembershipPlan,
+      value: string | string[],
+    ) => {
+      setForm((prev) => {
+        const resolved = getResolvedMembershipSeasons(prev);
+        const plans = resolved[season].form.plans.map((plan, index) =>
+          index === planIndex
+            ? {
+                ...plan,
+                [field]: value,
+              }
+            : plan,
+        );
+
+        return {
+          ...(prev ?? {}),
+          membershipSeasons: {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              form: {
+                ...resolved[season].form,
+                plans,
+              },
+            },
+          },
+        };
+      });
+    },
+    [setForm],
+  );
+
+  const addMembershipPlan = useCallback(
+    (season: MembershipSeason) => {
+      setForm((prev) => {
+        const resolved = getResolvedMembershipSeasons(prev);
+        return {
+          ...(prev ?? {}),
+          membershipSeasons: {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              form: {
+                ...resolved[season].form,
+                plans: [
+                  ...resolved[season].form.plans,
+                  { name: "", price: "", features: [], bestFor: "" },
+                ],
+              },
+            },
+          },
+        };
+      });
+    },
+    [setForm],
+  );
+
+  const removeMembershipPlan = useCallback(
+    (season: MembershipSeason, planIndex: number) => {
+      setForm((prev) => {
+        const resolved = getResolvedMembershipSeasons(prev);
+        return {
+          ...(prev ?? {}),
+          membershipSeasons: {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              form: {
+                ...resolved[season].form,
+                plans: resolved[season].form.plans.filter((_, index) => index !== planIndex),
+              },
+            },
+          },
+        };
+      });
     },
     [setForm],
   );
@@ -1717,21 +1927,16 @@ function BusinessSettingsPanel({
     (season: MembershipSeason, value: string) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipSeasons: {
-          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-            paymentUrl: prev?.membershipPaymentUrl ?? "",
-            paymentLinks: prev?.membershipPaymentLinks ?? {},
-          }),
-          [season]: {
-            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-              paymentUrl: prev?.membershipPaymentUrl ?? "",
-              paymentLinks: prev?.membershipPaymentLinks ?? {},
-            })[season],
-            paymentUrl: value,
-          },
-        },
+        membershipSeasons: (() => {
+          const resolved = getResolvedMembershipSeasons(prev);
+          return {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              paymentUrl: value,
+            },
+          };
+        })(),
       }));
     },
     [setForm],
@@ -1741,28 +1946,19 @@ function BusinessSettingsPanel({
     (season: MembershipSeason, membershipType: string, value: string) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipSeasons: {
-          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-            paymentUrl: prev?.membershipPaymentUrl ?? "",
-            paymentLinks: prev?.membershipPaymentLinks ?? {},
-          }),
-          [season]: {
-            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-              paymentUrl: prev?.membershipPaymentUrl ?? "",
-              paymentLinks: prev?.membershipPaymentLinks ?? {},
-            })[season],
-            paymentLinks: {
-              ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-                form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-                paymentUrl: prev?.membershipPaymentUrl ?? "",
-                paymentLinks: prev?.membershipPaymentLinks ?? {},
-              })[season].paymentLinks,
-              [membershipType]: value,
+        membershipSeasons: (() => {
+          const resolved = getResolvedMembershipSeasons(prev);
+          return {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              paymentLinks: {
+                ...resolved[season].paymentLinks,
+                [membershipType]: value,
+              },
             },
-          },
-        },
+          };
+        })(),
       }));
     },
     [setForm],
@@ -1772,21 +1968,16 @@ function BusinessSettingsPanel({
     (season: MembershipSeason, value: string) => {
       setForm((prev) => ({
         ...(prev ?? {}),
-        membershipSeasons: {
-          ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-            form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-            paymentUrl: prev?.membershipPaymentUrl ?? "",
-            paymentLinks: prev?.membershipPaymentLinks ?? {},
-          }),
-          [season]: {
-            ...resolveMembershipSeasonState(prev?.membershipSeasons, {
-              form: prev?.membershipForm ?? DEFAULT_MEMBERSHIP_CONTENT,
-              paymentUrl: prev?.membershipPaymentUrl ?? "",
-              paymentLinks: prev?.membershipPaymentLinks ?? {},
-            })[season],
-            label: value,
-          },
-        },
+        membershipSeasons: (() => {
+          const resolved = getResolvedMembershipSeasons(prev);
+          return {
+            ...resolved,
+            [season]: {
+              ...resolved[season],
+              label: value,
+            },
+          };
+        })(),
       }));
     },
     [setForm],
@@ -2020,8 +2211,76 @@ function BusinessSettingsPanel({
               </div>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-2">
-              {MEMBERSHIP_SEASONS.map((season) => {
+            <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Text className="text-xs uppercase tracking-wide text-white/60">
+                  Membership season editor
+                </Text>
+                <Text className="text-xs text-white/50">
+                  Editing{" "}
+                  <span className="font-semibold text-white">
+                    {activeMembershipSeason === "winter" ? "Winter" : "Summer"}
+                  </span>
+                </Text>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {MEMBERSHIP_SEASONS.map((season) => {
+                  const isActive = season === activeMembershipSeason;
+                  const seasonState = membershipSeasons[season];
+                  const visibleCount = MEMBERSHIP_SECTION_VISIBILITY_KEYS.filter(
+                    (key) => seasonState.form.sectionVisibility[key],
+                  ).length;
+                  return (
+                    <button
+                      key={`season-tab-${season}`}
+                      type="button"
+                      className={clsx(
+                        "rounded-xl border px-4 py-3 text-left transition",
+                        isActive
+                          ? "border-red-400/50 bg-red-500/10"
+                          : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/5",
+                      )}
+                      onClick={() => setActiveMembershipSeason(season)}
+                      disabled={loading}
+                    >
+                      <Text className="text-xs uppercase tracking-wide text-white/60">
+                        {season === "winter" ? "Winter Membership" : "Summer Membership"}
+                      </Text>
+                      <Text className="mt-1 text-sm font-semibold text-white">
+                        {seasonState.form.membershipTypes.length} type
+                        {seasonState.form.membershipTypes.length === 1 ? "" : "s"} |{" "}
+                        {seasonState.form.plans.length} plan
+                        {seasonState.form.plans.length === 1 ? "" : "s"}
+                      </Text>
+                      <Text className="mt-1 text-xs text-white/60">
+                        {visibleCount}/{MEMBERSHIP_SECTION_VISIBILITY_KEYS.length} sections visible
+                      </Text>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {MEMBERSHIP_SECTION_VISIBILITY_KEYS.map((sectionKey) => {
+                  const isVisible = activeMembershipForm.sectionVisibility[sectionKey];
+                  return (
+                    <span
+                      key={`active-season-section-${sectionKey}`}
+                      className={clsx(
+                        "rounded-full border px-3 py-1 text-[11px] uppercase tracking-wide",
+                        isVisible
+                          ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
+                          : "border-white/10 bg-black/20 text-white/50",
+                      )}
+                    >
+                      {sectionLabels[sectionKey]}: {isVisible ? "Shown" : "Hidden"}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid gap-6">
+              {[activeMembershipSeason].map((season) => {
                 const seasonState = membershipSeasons[season];
                 const membershipForm = seasonState.form;
 
@@ -2090,6 +2349,42 @@ function BusinessSettingsPanel({
                             />
                           </FormField>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Section Visibility
+                      </Subheading>
+                      <Text className="text-xs text-white/60">
+                        Toggle which sections are shown for this season on the website.
+                      </Text>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {MEMBERSHIP_SECTION_VISIBILITY_KEYS.map((sectionKey) => {
+                          const fieldId = `${season}-membership-section-${sectionKey}`;
+                          return (
+                            <SwitchField key={fieldId}>
+                              <Label
+                                htmlFor={fieldId}
+                                className="text-xs uppercase tracking-wide text-white/70"
+                              >
+                                {sectionLabels[sectionKey]}
+                              </Label>
+                              <Switch
+                                id={fieldId}
+                                checked={membershipForm.sectionVisibility[sectionKey]}
+                                onChange={(value) =>
+                                  updateMembershipSectionVisibility(
+                                    season,
+                                    sectionKey,
+                                    value,
+                                  )
+                                }
+                                disabled={loading}
+                              />
+                            </SwitchField>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -2187,6 +2482,116 @@ function BusinessSettingsPanel({
                           disabled={loading}
                         />
                       </FormField>
+                    </div>
+
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <Subheading level={3} className="text-sm uppercase tracking-wide text-white">
+                        Membership Plans
+                      </Subheading>
+                      <Text className="text-xs text-white/60">
+                        Optional plan cards for the public membership page. Use Membership Types
+                        for checkout options in the form dropdown.
+                      </Text>
+                      <FormField label="Plans section title">
+                        <Input
+                          type="text"
+                          value={membershipForm.plansTitle}
+                          onChange={(event) =>
+                            updateMembershipForm(season, "plansTitle", event.target.value)
+                          }
+                          disabled={loading}
+                        />
+                      </FormField>
+                      <div className="space-y-4">
+                        {membershipForm.plans.map((plan, index) => (
+                          <div
+                            key={`${season}-plan-${index}`}
+                            className="space-y-4 rounded-xl border border-white/10 bg-black/30 p-4"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <Text className="text-xs uppercase tracking-wide text-white/60">
+                                Plan {index + 1}
+                              </Text>
+                              <Button
+                                outline
+                                type="button"
+                                onClick={() => removeMembershipPlan(season, index)}
+                                disabled={loading}
+                              >
+                                Remove plan
+                              </Button>
+                            </div>
+                            <FormField label="Plan name">
+                              <Input
+                                type="text"
+                                value={plan.name}
+                                onChange={(event) =>
+                                  updateMembershipPlan(
+                                    season,
+                                    index,
+                                    "name",
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={loading}
+                              />
+                            </FormField>
+                            <FormField label="Plan price">
+                              <Input
+                                type="text"
+                                value={plan.price}
+                                onChange={(event) =>
+                                  updateMembershipPlan(
+                                    season,
+                                    index,
+                                    "price",
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={loading}
+                              />
+                            </FormField>
+                            <FormField label="Plan features" hint="One feature per line.">
+                              <Textarea
+                                rows={4}
+                                value={listToText(plan.features)}
+                                onChange={(event) =>
+                                  updateMembershipPlan(
+                                    season,
+                                    index,
+                                    "features",
+                                    textToList(event.target.value),
+                                  )
+                                }
+                                disabled={loading}
+                              />
+                            </FormField>
+                            <FormField label="Best for">
+                              <Textarea
+                                rows={2}
+                                value={plan.bestFor}
+                                onChange={(event) =>
+                                  updateMembershipPlan(
+                                    season,
+                                    index,
+                                    "bestFor",
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={loading}
+                              />
+                            </FormField>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        color="zinc"
+                        type="button"
+                        onClick={() => addMembershipPlan(season)}
+                        disabled={loading}
+                      >
+                        Add plan
+                      </Button>
                     </div>
 
                     <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">

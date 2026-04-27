@@ -8,6 +8,8 @@ import {
   MEMBERSHIP_SEASONS,
   createDefaultSeasonalMembershipContent,
   type MembershipFormContent,
+  type MembershipPlan,
+  type MembershipSectionVisibility,
 } from "@/data/membershipContent";
 import { Button } from "@/components/ui/Button";
 import useBusinessSettings from "@/hooks/useBusinessSettings";
@@ -25,6 +27,67 @@ function mergeList(value: unknown, fallback: string[]) {
     .filter(Boolean);
 }
 
+function mergePlans(value: unknown, fallback: MembershipPlan[]) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  const plans = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const plan = entry as Partial<MembershipPlan>;
+      const features = Array.isArray(plan.features)
+        ? plan.features
+            .map((feature) => (typeof feature === "string" ? feature.trim() : ""))
+            .filter(Boolean)
+        : [];
+
+      return {
+        name: typeof plan.name === "string" ? plan.name.trim() : "",
+        price: typeof plan.price === "string" ? plan.price.trim() : "",
+        features,
+        bestFor: typeof plan.bestFor === "string" ? plan.bestFor.trim() : "",
+      };
+    })
+    .filter(
+      (plan): plan is MembershipPlan =>
+        plan !== null &&
+        (plan.name.length > 0 ||
+          plan.price.length > 0 ||
+          plan.bestFor.length > 0 ||
+          plan.features.length > 0),
+    );
+
+  return plans;
+}
+
+function mergeSectionVisibility(
+  value: unknown,
+  fallback: MembershipSectionVisibility,
+): MembershipSectionVisibility {
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+
+  const candidate = value as Partial<MembershipSectionVisibility>;
+  return {
+    paymentOptions:
+      typeof candidate.paymentOptions === "boolean"
+        ? candidate.paymentOptions
+        : fallback.paymentOptions,
+    plans: typeof candidate.plans === "boolean" ? candidate.plans : fallback.plans,
+    perks: typeof candidate.perks === "boolean" ? candidate.perks : fallback.perks,
+    details: typeof candidate.details === "boolean" ? candidate.details : fallback.details,
+    enrollment:
+      typeof candidate.enrollment === "boolean"
+        ? candidate.enrollment
+        : fallback.enrollment,
+  };
+}
+
 function mergeMembershipContent(
   configured: unknown,
   fallback: MembershipFormContent,
@@ -38,8 +101,16 @@ function mergeMembershipContent(
     ...fallback,
     ...candidate,
     paymentOptions: mergeList(candidate.paymentOptions, [...fallback.paymentOptions]),
+    plans: mergePlans(
+      candidate.plans,
+      fallback.plans.map((plan) => ({ ...plan, features: [...plan.features] })),
+    ),
     perks: mergeList(candidate.perks, [...fallback.perks]),
     details: mergeList(candidate.details, [...fallback.details]),
+    sectionVisibility: mergeSectionVisibility(
+      candidate.sectionVisibility,
+      fallback.sectionVisibility,
+    ),
     membershipTypes: mergeList(candidate.membershipTypes, [...fallback.membershipTypes]),
     enrollmentSteps: mergeList(candidate.enrollmentSteps, [...fallback.enrollmentSteps]),
   };
@@ -109,47 +180,92 @@ export default function MembershipPageContent() {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">
                     {label}
                   </p>
-                  <h3 className="mt-3 text-2xl font-bold uppercase tracking-wide text-white">
-                    Payment Options
-                  </h3>
-                  <div className="mt-6 space-y-4 text-base text-white/80">
-                    {content.paymentOptions.map((option) => (
-                      <p key={option}>{option}</p>
-                    ))}
-                  </div>
-
+                  {content.sectionVisibility.paymentOptions ? (
+                    <div>
+                      <h3 className="mt-3 text-2xl font-bold uppercase tracking-wide text-white">
+                        Payment Options
+                      </h3>
+                      <div className="mt-6 space-y-4 text-base text-white/80">
+                        {content.paymentOptions.map((option) => (
+                          <p key={option}>{option}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {content.sectionVisibility.plans ? (
+                    <div>
+                      {content.plansTitle ? (
+                        <h3 className="mt-3 text-2xl font-bold uppercase tracking-wide text-white">
+                          {content.plansTitle}
+                        </h3>
+                      ) : null}
+                      <div className="mt-6 space-y-5">
+                        {content.plans.map((plan, index) => (
+                          <section
+                            key={`${plan.name || "plan"}-${index}`}
+                            className="rounded-2xl border border-white/10 bg-white/5 p-5"
+                          >
+                            <h4 className="text-xl font-semibold text-white">
+                              {plan.name || `Plan ${index + 1}`}{" "}
+                              {plan.price ? (
+                                <span className="font-normal text-primary">{plan.price}</span>
+                              ) : null}
+                            </h4>
+                            {plan.features.length ? (
+                              <ul className="mt-4 list-disc space-y-2 pl-5 text-base text-white/80">
+                                {plan.features.map((feature) => (
+                                  <li key={feature}>{feature}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                            {plan.bestFor ? (
+                              <p className="mt-4 text-base text-white/80">
+                                <span className="font-semibold text-white">Best for: </span>
+                                {plan.bestFor}
+                              </p>
+                            ) : null}
+                          </section>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {content.sectionVisibility.perks ? (
+                    <div>
+                      <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
+                        {content.perksTitle}
+                      </h3>
+                      <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
+                        {content.perks.map((perk) => (
+                          <li key={perk}>{perk}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {content.sectionVisibility.details ? (
+                    <div>
+                      <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
+                        {content.detailsTitle}
+                      </h3>
+                      <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
+                        {content.details.map((detail) => (
+                          <li key={detail}>{detail}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {content.sectionVisibility.enrollment ? (
+                    <div>
+                      <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
+                        {content.enrollmentTitle}
+                      </h3>
+                      <div className="mt-6 space-y-3 text-base text-white/80">
+                        {content.enrollmentSteps.map((step) => (
+                          <p key={step}>{step}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <SectionDivider />
-
-                  <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
-                    {content.perksTitle}
-                  </h3>
-                  <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
-                    {content.perks.map((perk) => (
-                      <li key={perk}>{perk}</li>
-                    ))}
-                  </ul>
-
-                  <SectionDivider />
-
-                  <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
-                    {content.detailsTitle}
-                  </h3>
-                  <ul className="mt-6 list-disc space-y-3 pl-5 text-base text-white/80">
-                    {content.details.map((detail) => (
-                      <li key={detail}>{detail}</li>
-                    ))}
-                  </ul>
-
-                  <SectionDivider />
-
-                  <h3 className="text-2xl font-bold uppercase tracking-wide text-white">
-                    {content.enrollmentTitle}
-                  </h3>
-                  <div className="mt-6 space-y-3 text-base text-white/80">
-                    {content.enrollmentSteps.map((step) => (
-                      <p key={step}>{step}</p>
-                    ))}
-                  </div>
                   <div className="mt-8">
                     <Button href="#membership-form">Join Now</Button>
                   </div>

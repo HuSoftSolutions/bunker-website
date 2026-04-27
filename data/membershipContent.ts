@@ -3,10 +3,13 @@ export type MembershipFormContent = {
   formDescription: string;
   agreementTitle: string;
   paymentOptions: string[];
+  plansTitle: string;
+  plans: MembershipPlan[];
   perksTitle: string;
   perks: string[];
   detailsTitle: string;
   details: string[];
+  sectionVisibility: MembershipSectionVisibility;
   membershipTypeLabel: string;
   membershipTypes: string[];
   successTitle: string;
@@ -14,6 +17,21 @@ export type MembershipFormContent = {
   paymentLinkLabel: string;
   enrollmentTitle: string;
   enrollmentSteps: string[];
+};
+
+export type MembershipPlan = {
+  name: string;
+  price: string;
+  features: string[];
+  bestFor: string;
+};
+
+export type MembershipSectionVisibility = {
+  paymentOptions: boolean;
+  plans: boolean;
+  perks: boolean;
+  details: boolean;
+  enrollment: boolean;
 };
 
 export const MEMBERSHIP_SEASONS = ["winter", "summer"] as const;
@@ -35,6 +53,8 @@ export const DEFAULT_MEMBERSHIP_CONTENT: MembershipFormContent = {
     "$275 per month — two month minimum",
     "$350 One Month, One Time ($1000 VALUE) — WOULD MAKE A GREAT GIFT",
   ],
+  plansTitle: "",
+  plans: [],
   perksTitle: "Plenty of Perks!",
   perks: [
     "Gives you 60 minutes of simulator time in standard bays ONLY per day during non-peak hours. 10% off simulator time used beyond 60 minutes. Non-peak hours are Monday-Thursday from 9am-3pm ($1000 VALUE) excludes Holidays",
@@ -57,6 +77,13 @@ export const DEFAULT_MEMBERSHIP_CONTENT: MembershipFormContent = {
     "Membership is nontransferable and can only be used by member card holders. Violation will result in membership cancellation without a refund given",
     "Monthly membership will automatically be renewed for following month unless member gives one week notice to cancel",
   ],
+  sectionVisibility: {
+    paymentOptions: true,
+    plans: false,
+    perks: true,
+    details: true,
+    enrollment: true,
+  },
   membershipTypeLabel: "Choose Membership Type",
   membershipTypes: [
     "Pay in Full for Year ($1500)",
@@ -87,6 +114,7 @@ export const DEFAULT_SUMMER_MEMBERSHIP_CONTENT: MembershipFormContent = {
   ...DEFAULT_MEMBERSHIP_CONTENT,
   agreementTitle: "Summer Membership Agreement Payment Options",
   paymentOptions: [...DEFAULT_MEMBERSHIP_CONTENT.paymentOptions],
+  plans: [...DEFAULT_MEMBERSHIP_CONTENT.plans],
   perks: [...DEFAULT_MEMBERSHIP_CONTENT.perks],
   details: [...DEFAULT_MEMBERSHIP_CONTENT.details],
   membershipTypes: [...DEFAULT_MEMBERSHIP_CONTENT.membershipTypes],
@@ -97,8 +125,15 @@ function cloneMembershipContent(content: MembershipFormContent): MembershipFormC
   return {
     ...content,
     paymentOptions: [...content.paymentOptions],
+    plans: content.plans.map((plan) => ({
+      ...plan,
+      features: [...plan.features],
+    })),
     perks: [...content.perks],
     details: [...content.details],
+    sectionVisibility: {
+      ...content.sectionVisibility,
+    },
     membershipTypes: [...content.membershipTypes],
     enrollmentSteps: [...content.enrollmentSteps],
   };

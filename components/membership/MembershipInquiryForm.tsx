@@ -362,36 +362,78 @@ export function MembershipInquiryForm({
             </p>
           ) : (
             <>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
-            {activeContent.agreementTitle}
-          </h3>
-          <div className="mt-4 space-y-2 text-sm text-white/75">
-            {activeContent.paymentOptions.map((option) => (
-              <p key={option}>{option}</p>
-            ))}
-          </div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-white">
+                {activeContent.agreementTitle}
+              </h3>
+              {activeContent.sectionVisibility.paymentOptions ? (
+                <div className="mt-4 space-y-2 text-sm text-white/75">
+                  {activeContent.paymentOptions.map((option) => (
+                    <p key={option}>{option}</p>
+                  ))}
+                </div>
+              ) : null}
 
-          <div className="mt-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-              {activeContent.perksTitle}
-            </p>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
-              {activeContent.perks.map((perk) => (
-                <li key={perk}>{perk}</li>
-              ))}
-            </ul>
-          </div>
+              {activeContent.sectionVisibility.plans ? (
+                <div className="mt-6 space-y-3">
+                  {activeContent.plansTitle ? (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                      {activeContent.plansTitle}
+                    </p>
+                  ) : null}
+                  {activeContent.plans.map((plan, index) => (
+                    <div
+                      key={`${plan.name || "plan"}-${index}`}
+                      className="rounded-xl border border-white/10 bg-black/20 p-4"
+                    >
+                      <p className="text-sm font-semibold text-white">
+                        {plan.name || `Plan ${index + 1}`}{" "}
+                        {plan.price ? (
+                          <span className="font-normal text-primary">{plan.price}</span>
+                        ) : null}
+                      </p>
+                      {plan.features.length ? (
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/75">
+                          {plan.features.map((feature) => (
+                            <li key={feature}>{feature}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {plan.bestFor ? (
+                        <p className="mt-2 text-sm text-white/75">
+                          <span className="font-semibold text-white">Best for: </span>
+                          {plan.bestFor}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
-          <div className="mt-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
-              {activeContent.detailsTitle}
-            </p>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
-              {activeContent.details.map((detail) => (
-                <li key={detail}>{detail}</li>
-              ))}
-            </ul>
-          </div>
+              {activeContent.sectionVisibility.perks ? (
+                <div className="mt-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                    {activeContent.perksTitle}
+                  </p>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
+                    {activeContent.perks.map((perk) => (
+                      <li key={perk}>{perk}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {activeContent.sectionVisibility.details ? (
+                <div className="mt-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                    {activeContent.detailsTitle}
+                  </p>
+                  <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-white/75">
+                    {activeContent.details.map((detail) => (
+                      <li key={detail}>{detail}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -445,15 +487,17 @@ export function MembershipInquiryForm({
       </FormCard>
 
       {paymentUrl ? (
-        <div className="mt-4 text-center text-xs uppercase tracking-wide text-white/60">
-          Need to pay?{" "}
+        <div className="mt-6 flex flex-col items-center gap-3 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/65">
+            Need to pay?
+          </p>
           <a
             href={paymentUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-primary underline-offset-4 hover:underline"
+            className="inline-flex w-full max-w-sm items-center justify-center rounded-full bg-red-600 px-8 py-4 text-sm font-bold uppercase tracking-[0.2em] text-white transition-colors hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
           >
-            Complete payment
+            Complete Payment
           </a>
         </div>
       ) : null}
