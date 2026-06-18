@@ -32,6 +32,11 @@ const POSITION_OPTIONS = [
   "Other",
 ] as const;
 
+// Locations offered on the career form that are not full site locations.
+const CAREER_ONLY_LOCATIONS: Array<{ id: string; label: string }> = [
+  { id: "turningstoneverona", label: "Turning Stone Verona, NY" },
+];
+
 const isAllowedResumeType = (mimeType: string) =>
   mimeType === "application/pdf" ||
   mimeType ===
@@ -62,6 +67,14 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
         return { id: location.id ?? formatLocationId(name), label: name };
       })
       .filter(Boolean) as Array<{ id: string; label: string }>;
+    const existingLabels = new Set(
+      values.map((option) => option.label.toLowerCase()),
+    );
+    CAREER_ONLY_LOCATIONS.forEach((option) => {
+      if (!existingLabels.has(option.label.toLowerCase())) {
+        values.push(option);
+      }
+    });
     values.sort((a, b) => a.label.localeCompare(b.label));
     return values;
   }, [locations]);
