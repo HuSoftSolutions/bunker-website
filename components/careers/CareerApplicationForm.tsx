@@ -34,7 +34,7 @@ const POSITION_OPTIONS = [
 
 // Locations offered on the career form that are not full site locations.
 const CAREER_ONLY_LOCATIONS: Array<{ id: string; label: string }> = [
-  // { id: "turningstoneverona", label: "Turning Stone Verona, NY" },
+  { id: "turningstoneverona", label: "The Bunker Turning Stone" },
 ];
 
 const isAllowedResumeType = (mimeType: string) =>
