@@ -7,6 +7,7 @@ import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage
 import { toast } from "react-toastify";
 import type Firebase from "@/lib/firebase/client";
 import useLocations from "@/hooks/useLocations";
+import { buildCareerLocationOptions } from "@/utils/careerLocations";
 import { useInquirySettings } from "@/hooks/useInquirySettings";
 import { Button } from "@/components/ui/Button";
 import { Field, FileInput, FormCard, Select, TextInput, Textarea } from "@/components/ui/Form";
@@ -32,19 +33,10 @@ const POSITION_OPTIONS = [
   "Other",
 ] as const;
 
-// Locations offered on the career form that are not full site locations.
-const CAREER_ONLY_LOCATIONS: Array<{ id: string; label: string }> = [
-  { id: "turningstoneverona", label: "The Bunker Turning Stone" },
-];
-
 const isAllowedResumeType = (mimeType: string) =>
   mimeType === "application/pdf" ||
   mimeType ===
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-function formatLocationId(value: string) {
-  return value.replace(", NY", "").trim().toLowerCase().replace(/\s+/g, "");
-}
 
 async function uploadResume(firebase: Firebase, file: File): Promise<ResumeMeta> {
   const safeName = file.name.replace(/[^\w.\-()]+/g, "_");
@@ -59,25 +51,10 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
   const { locations } = useLocations(firebase);
   const { settings } = useInquirySettings(firebase);
 
-  const locationOptions = useMemo(() => {
-    const values = locations
-      .map((location) => {
-        const name = typeof location.name === "string" ? location.name : "";
-        if (!name) return null;
-        return { id: location.id ?? formatLocationId(name), label: name };
-      })
-      .filter(Boolean) as Array<{ id: string; label: string }>;
-    const existingLabels = new Set(
-      values.map((option) => option.label.toLowerCase()),
-    );
-    CAREER_ONLY_LOCATIONS.forEach((option) => {
-      if (!existingLabels.has(option.label.toLowerCase())) {
-        values.push(option);
-      }
-    });
-    values.sort((a, b) => a.label.localeCompare(b.label));
-    return values;
-  }, [locations]);
+  const locationOptions = useMemo(
+    () => buildCareerLocationOptions(locations),
+    [locations],
+  );
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -95,7 +72,7 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
     if (!locationId) {
       return "";
     }
-    return locationOptions.find((option) => option.id === locationId)?.label ?? "";
+    return locationOptions.find((option) => option.id === locationId)?.name ?? "";
   }, [locationId, locationOptions]);
 
   const resolvedRecipients = useMemo(
@@ -292,7 +269,7 @@ export function CareerApplicationForm({ firebase, className }: CareerApplication
               <option value="">Select a Location</option>
               {locationOptions.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {option.label}
+                  {option.name}
                 </option>
               ))}
             </Select>

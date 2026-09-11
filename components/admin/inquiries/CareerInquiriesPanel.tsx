@@ -17,10 +17,10 @@ import { formatPhone } from "@/utils/format";
 import { useAuth } from "@/providers/AuthProvider";
 import { type AdminInquiryKind, resolveAdminInquiryReadState } from "@/utils/adminReadState";
 import {
-  buildInquiryLocationOptions,
   matchesInquiryLocation,
   matchesAllowedInquiryLocations,
 } from "@/utils/inquiryLocationFilter";
+import { buildCareerLocationOptions } from "@/utils/careerLocations";
 import { getManagerLocationIds, isAdmin } from "@/utils/auth";
 import {
   InquiryBoard,
@@ -239,7 +239,7 @@ export function CareerInquiriesPanel({ firebase }: CareerInquiriesPanelProps) {
   const inquiryLocationId = searchParams?.get("inquiryLocationId") ?? "";
   const { authUser } = useAuth();
   const locationOptions = useMemo(
-    () => buildInquiryLocationOptions(locations),
+    () => buildCareerLocationOptions(locations),
     [locations],
   );
   const isAdminUser = isAdmin(authUser);

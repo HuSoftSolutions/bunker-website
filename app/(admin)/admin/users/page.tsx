@@ -15,6 +15,7 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ADMIN_NAV_ITEMS } from "@/constants/adminNav";
 import useLocations from "@/hooks/useLocations";
+import { buildCareerLocationOptions } from "@/utils/careerLocations";
 import type Firebase from "@/lib/firebase/client";
 import { useAuth } from "@/providers/AuthProvider";
 import { useFirebase } from "@/providers/FirebaseProvider";
@@ -114,11 +115,7 @@ export default function AdminUsersPage() {
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const managerLocations = useMemo(
-    () =>
-      locations.map((location) => ({
-        id: typeof location.id === "string" ? location.id : "",
-        name: typeof location.name === "string" ? location.name : "Location",
-      })),
+    () => buildCareerLocationOptions(locations),
     [locations],
   );
 
