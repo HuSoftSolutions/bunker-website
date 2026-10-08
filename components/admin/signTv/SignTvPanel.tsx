@@ -31,10 +31,12 @@ import {
 } from "firebase/storage";
 import { toast } from "react-toastify";
 import clsx from "clsx";
+import { resolveRotation, rotationSettings, type Rotation } from "@/lib/signTv/rotation";
 
 type TvSettings = {
   tvMounted?: "portrait" | "landscape";
   tvRotationDirection?: string;
+  tvRotationDegrees?: number;
   tickerDisplay?: "top" | "bottom" | "hidden";
   tickerSize?: "xs" | "sm" | "md" | "lg" | "xl";
   tickerTheme?: "light" | "dark" | "red" | "blue";
@@ -550,7 +552,7 @@ export function SignTvPanel({
                               ...(prev ?? { id: selectedScreenId }),
                               tvSettings: {
                                 ...resolveSettings(prev?.tvSettings),
-                                tvMounted: e.target.value as TvSettings["tvMounted"],
+                                ...rotationSettings(e.target.value === "portrait" ? 270 : 0),
                               },
                             }))
                           }
@@ -563,19 +565,21 @@ export function SignTvPanel({
                       <Field>
                         <Label>Rotation</Label>
                         <Select
-                          value={resolveSettings(form?.tvSettings).tvRotationDirection}
+                          value={resolveRotation(resolveSettings(form?.tvSettings))}
                           onChange={(e) =>
                             setForm((prev) => ({
                               ...(prev ?? { id: selectedScreenId }),
                               tvSettings: {
                                 ...resolveSettings(prev?.tvSettings),
-                                tvRotationDirection: e.target.value,
+                                ...rotationSettings(Number(e.target.value) as Rotation),
                               },
                             }))
                           }
                         >
-                          <option value="translate(-50%, -50%) rotate(-90deg)">Rotate Left</option>
-                          <option value="translate(-50%, -50%) rotate(90deg)">Rotate Right</option>
+                          <option value={0}>0° — Normal</option>
+                          <option value={90}>90° — Right</option>
+                          <option value={180}>180° — Upside down</option>
+                          <option value={270}>270° — Left</option>
                         </Select>
                       </Field>
 

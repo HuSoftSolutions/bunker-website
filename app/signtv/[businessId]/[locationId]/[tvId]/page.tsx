@@ -8,7 +8,7 @@ import { collection, doc, onSnapshot } from "firebase/firestore";
 import { SignTvTicker } from "@/components/signTv/SignTvTicker";
 import { SIGN_TV_BUSINESS_ID } from "@/constants/routes";
 import { SIGNTV_USER_ID } from "@/constants/signTv";
-import useWindowDimensions from "@/hooks/useWindowDimensions";
+import { rotationStyle } from "@/lib/signTv/rotation";
 import { useSignTvFirebase } from "@/providers/SignTvFirebaseProvider";
 import type SignTvFirebase from "@/lib/firebase/signTvClient";
 
@@ -22,6 +22,7 @@ const THEME_CLASSES: Record<string, string> = {
 type SignTvSettings = {
   tvMounted?: "portrait" | "landscape";
   tvRotationDirection?: string;
+  tvRotationDegrees?: number;
   tickerDisplay?: "top" | "bottom" | "hidden";
   tickerSize?: "xs" | "sm" | "md" | "lg" | "xl";
   tickerTheme?: "light" | "dark" | "red" | "blue";
@@ -40,6 +41,7 @@ const resolveStringValue = (value: unknown, fallback = "") =>
 
 const resolveSignTvSettings = (value?: SignTvSettings): SignTvSettings => ({
   tvMounted: value?.tvMounted ?? "landscape",
+  tvRotationDegrees: value?.tvRotationDegrees,
   tvRotationDirection:
     value?.tvRotationDirection ?? "translate(-50%, -50%) rotate(-90deg)",
   tickerDisplay: value?.tickerDisplay ?? "bottom",
@@ -56,7 +58,6 @@ type SignTvParams = {
 
 export default function SignTvPage() {
   const firebase = useSignTvFirebase() as SignTvFirebase;
-  const { width, height } = useWindowDimensions();
   const [location, setLocation] = useState<Record<string, unknown> | null>(null);
   const [graphics, setGraphics] = useState<SignTvGraphic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,27 +193,7 @@ export default function SignTvPage() {
 
   const themeClass =
     THEME_CLASSES[settings.backgroundColor ?? "blue"] ?? THEME_CLASSES.blue;
-  const isLandscape = settings.tvMounted !== "portrait";
-  const rotation =
-    settings.tvRotationDirection ?? "translate(-50%, -50%) rotate(-90deg)";
-
-  const containerStyle = isLandscape
-    ? {
-        width: width || "100vw",
-        height: height || "100vh",
-      }
-    : {
-        width: "100vh",
-        height: "100vw",
-        position: "fixed" as const,
-        top: "50%",
-        left: "50%",
-        transform: rotation,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        overflow: "hidden",
-      };
+  const containerStyle = rotationStyle(settings);
 
   return (
     <div className={clsx("relative overflow-hidden", themeClass)} style={containerStyle}>
