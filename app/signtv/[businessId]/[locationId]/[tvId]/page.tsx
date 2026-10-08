@@ -235,7 +235,7 @@ export default function SignTvPage() {
               <div
                 key={`${graphic}-${index}`}
                 className={clsx(
-                  "absolute inset-0 flex items-center justify-center p-4 relative",
+                  "absolute inset-0",
                   index === currentIndex ? "opacity-100" : "opacity-0",
                 )}
               >
