@@ -28,7 +28,7 @@ export default function TeesheetPage() {
   const searchParams = useSearchParams();
   const firebase = useFirebase();
 
-  const { locations } = useLocations(firebase);
+  const { locations, loading: locationsLoading } = useLocations(firebase);
   const {
     settings: businessSettings,
     loading: businessSettingsLoading,
@@ -45,7 +45,6 @@ export default function TeesheetPage() {
         : businessSettings?.teesheetUrl,
     ),
   );
-  const embedUrl = requestedUrl ?? fallbackUrl;
 
   const activeLocation = useMemo(() => {
     if (locationIdParam) {
@@ -68,13 +67,17 @@ export default function TeesheetPage() {
     return null;
   }, [locations, locationIdParam, requestedUrl]);
 
+  const comingSoon = activeLocation?.comingSoon === true;
+  const checkingLocation = locationsLoading && Boolean(locationIdParam || requestedUrl);
+  const embedUrl = comingSoon || checkingLocation ? null : requestedUrl ?? fallbackUrl;
+
   const activeLocationName = resolveStringValue(activeLocation?.name);
   const title =
     locationNameParam ??
     (activeLocationName || null) ??
     (embedUrl ? "The Bunker Teesheet" : "Book Your Bay");
 
-  const showFallbackNotice = !embedUrl && !businessSettingsLoading;
+  const showFallbackNotice = !embedUrl && !businessSettingsLoading && !comingSoon && !checkingLocation;
 
   return (
     <div className="flex h-[calc(100vh-60px)] flex-col bg-gradient-to-b from-black via-zinc-950 to-black text-white xl:h-auto xl:min-h-screen">
@@ -108,10 +111,14 @@ export default function TeesheetPage() {
           <div className="flex flex-1 items-center justify-center px-4 py-12">
             <div className="max-w-md space-y-4 rounded-3xl border border-white/10 bg-zinc-900/80 p-8 text-center shadow-2xl shadow-black/40">
               <h2 className="text-lg font-semibold uppercase tracking-wide text-white">
-                Teesheet Link Unavailable
+                {comingSoon ? "Coming Soon" : checkingLocation ? "Loading Location…" : "Teesheet Link Unavailable"}
               </h2>
               <p className="text-sm text-white/70">
-                {businessSettingsLoading
+                {comingSoon
+                  ? "This location is not open for bookings yet. Stay tuned for opening updates."
+                  : checkingLocation
+                  ? "Checking location availability…"
+                  : businessSettingsLoading
                   ? "Loading teesheet preferences…"
                   : "Add a business teesheet link from the admin panel to enable direct booking."}
               </p>

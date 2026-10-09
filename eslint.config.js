@@ -8,7 +8,7 @@ module.exports = [
     ignores: [".next/**", "out/**", "build/**", "next-env.d.ts"],
   },
   {
-    files: ["eslint.config.js", "next.config.js", "postcss.config.js", "lib/webpack/**/*.cjs"],
+    files: ["eslint.config.js", "next.config.js", "postcss.config.js", "lib/webpack/**/*.cjs", "tests/**/*.cjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

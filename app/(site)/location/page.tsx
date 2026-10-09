@@ -153,7 +153,7 @@ export default function LocationsPage() {
       />
 
       <div className="mx-auto w-full max-w-full px-4 pt-12 pb-8">
-        <NearestLocationBanner locations={orderedLocations} />
+        <NearestLocationBanner locations={orderedLocations.filter((location) => location.comingSoon !== true)} />
       </div>
 
       <section className="relative mx-auto w-full max-w-full px-4 py-16">
@@ -193,6 +193,23 @@ export default function LocationsPage() {
               const lat = typeof coords?.lat === "number" ? coords.lat : null;
               const lng = typeof coords?.lng === "number" ? coords.lng : null;
               const virtualTourUrl = resolveStringValue(location.virtualTourUrl);
+
+              if (location.comingSoon === true) {
+                return (
+                  <article key={locationId || locationName} id={locationId ? `location-${locationId}` : undefined} className="overflow-hidden rounded-3xl border border-primary/30 bg-zinc-950 shadow-xl shadow-black/40">
+                    {coverImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={coverImage} alt={locationName} className="h-56 w-full object-cover" />
+                    ) : null}
+                    <div className="space-y-3 px-6 py-8">
+                      <span className="inline-flex rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">Coming Soon</span>
+                      <h2 className="text-2xl uppercase tracking-wide text-primary">{locationName}</h2>
+                      {resolveStringValue(location.city) ? <p className="text-sm text-white/70">{resolveStringValue(location.city)}</p> : null}
+                      <p className="text-sm text-white/70">{resolveStringValue(location.openingMessage, "A new Bunker is on the way. Stay tuned for opening updates.")}</p>
+                    </div>
+                  </article>
+                );
+              }
 
               return (
                 <article

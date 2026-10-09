@@ -47,7 +47,7 @@ export function LocationSelector({ className }: LocationSelectorProps) {
               modal={false}
               className="absolute left-0 z-40 mt-2 w-full min-w-[220px] rounded-2xl border border-white/10 bg-zinc-900/95 p-1 shadow-2xl shadow-black/40 backdrop-blur"
             >
-              {locations.map((location, index) => {
+              {locations.filter((location) => location.comingSoon !== true).map((location, index) => {
                 const locationId = resolveStringValue(location?.id);
                 const locationName = resolveStringValue(
                   location?.name,

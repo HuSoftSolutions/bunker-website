@@ -16,7 +16,7 @@
     "date-fns": "^2.30.0",
     "firebase": "^12.6.0",
     "motion": "^12.23.26",
-    "next": "^15.5.3",
+    "next": "^15.5.27",
     "react": "18.3.1",
     "react-canvas-confetti": "^2.0.7",
     "react-dom": "18.3.1",
@@ -30,9 +30,17 @@
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.2",
-    "eslint-config-next": "^15.5.3",
+    "eslint-config-next": "^15.5.27",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.4.5"
+  },
+  "overrides": {
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "^1.13.7"
+    },
+    "next": {
+      "postcss": "^8.5.29"
+    }
   }
 }

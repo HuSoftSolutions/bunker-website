@@ -1,5 +1,7 @@
 "use client";
 
+import { AddLocationDialog } from "@/components/admin/locations/AddLocationDialog";
+import { LocationLaunchFields } from "@/components/admin/locations/LocationLaunchFields";
 import { AdminShell } from "@/components/admin/AdminShell";
 import {
   CareerInquiriesPanel,
@@ -1596,13 +1598,30 @@ export default function LocationsAdminPage() {
     status,
   ]);
 
-  const toolbarContent = null;
+  const [addingLocation, setAddingLocation] = useState(false);
+  const toolbarContent = isAdminUser ? (
+    <Button onClick={() => setAddingLocation(true)}>Add Location</Button>
+  ) : null;
 
   return (
     <AdminShell
       title={adminView === "business" ? "Business" : "Locations"}
       toolbar={toolbarContent}
     >
+      {addingLocation && isAdminUser ? (
+        <AddLocationDialog
+          firebase={firebase}
+          onClose={() => setAddingLocation(false)}
+          onCreated={(id) => {
+            setAddingLocation(false);
+            setSelectedLocationId(id);
+            setAdminView("location");
+            setActiveTab("general");
+            router.push(`/admin/locations?view=location&tab=general&locationId=${encodeURIComponent(id)}`);
+            toast.success("Location created successfully.");
+          }}
+        />
+      ) : null}
       {adminView === "business" ? (
         <div className="space-y-4">
           {businessTab === "settings" ? (
@@ -3079,6 +3098,7 @@ function GeneralTab({ form, onChange }: GeneralTabProps) {
 
   return (
     <div className="space-y-6">
+      <LocationLaunchFields form={form} onChange={onChange} />
       <FormGrid columns={2}>
         <FormField label="Location Name">
           <Input

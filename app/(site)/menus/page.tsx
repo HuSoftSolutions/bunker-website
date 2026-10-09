@@ -100,6 +100,7 @@ export default function MenusPage() {
     return ordered.filter(
       (locationItem) =>
         locationItem &&
+        locationItem.comingSoon !== true &&
         Boolean(resolveStringValue(locationItem.name)),
     );
   }, [locations]);
